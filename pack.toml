@@ -1,0 +1,4 @@
+[custom.all.tpl]
+type   = "local"
+path   = "."
+ipkg   = "tpl.ipkg"
