@@ -74,6 +74,10 @@ nat : Nat -> Term
 nat = cast
 
 export %inline
+int : Integer -> Term
+int = nat . cast
+
+export %inline
 bool : Bool -> Term
 bool = cast
 
