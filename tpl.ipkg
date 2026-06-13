@@ -1,0 +1,13 @@
+package tpl
+version    = 0.0.1
+authors    = "Stefan Höck"
+depends    = base    >= 0.6.0
+           , ilex
+           , linear
+           , ref1
+
+brief      = "Working through Types and Programming Languages"
+
+modules    = TPL.ArExp.Term
+
+sourcedir  = "src"

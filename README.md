@@ -1,2 +1,3 @@
-# idris2-tpl
-TPL
+# Types and Programming Languages in Idris
+
+WIP
