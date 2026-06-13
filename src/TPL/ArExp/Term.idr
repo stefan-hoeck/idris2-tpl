@@ -82,6 +82,52 @@ bool : Bool -> Term
 bool = cast
 
 --------------------------------------------------------------------------------
+-- Values
+--------------------------------------------------------------------------------
+
+public export
+data Value : Type where
+  VTrue  : Value
+  VFalse : Value
+  VZero  : Value
+  VSucc  : Value -> Value
+
+%runElab derive "Value" [Show,Eq,Ord]
+
+export
+step : Term -> Maybe Term
+step (TIf TTrue  t f)  = Just t
+step (TIf TFalse t f)  = Just f
+step (TIf x      t f)  = (\x' => TIf x' t f) <$> step x
+step (TSucc x       )  = TSucc <$> step x
+step (TPred TZ      )  = Just TZ
+step (TPred $ TSucc x) = Just x
+step (TPred x)         = TPred <$> step x
+step (TIsZ TZ)         = Just TTrue
+step (TIsZ $ TSucc _)  = Just TFalse
+step (TIsZ x)          = TIsZ <$> step x
+step _                 = Nothing
+
+export
+toVal : Term -> Maybe Value
+toVal TTrue       = Just VTrue
+toVal TFalse      = Just VFalse
+toVal TZ          = Just VZero
+toVal (TSucc x)   =
+  case toVal x of
+    Just VZero       => Just (VSucc VZero)
+    Just n@(VSucc _) => Just (VSucc n)
+    _                => Nothing
+toVal _           = Nothing
+
+export
+eval : Term -> Either Term Value
+eval x =
+  case step x of
+    Just y  => eval (assert_smaller x y)
+    Nothing => maybe (Left x) Right $ toVal x
+
+--------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------
 
@@ -100,3 +146,17 @@ pretty (TIsZ x)    = "iszero \{paren x}"
 
 export %inline
 Interpolation Term where interpolate = pretty
+
+prettyV : Value -> String
+
+parenV : Value -> String
+parenV v@(VSucc {}) = "(\{prettyV v})"
+parenV v            = prettyV v
+
+prettyV VTrue       = "true"
+prettyV VFalse      = "false"
+prettyV VZero       = "0"
+prettyV (VSucc x)   = "succ \{parenV x}"
+
+export %inline
+Interpolation Value where interpolate = prettyV
