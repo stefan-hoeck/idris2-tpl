@@ -58,6 +58,26 @@ bool : Bool -> Term
 bool = cast
 
 --------------------------------------------------------------------------------
+-- Evaluation
+--------------------------------------------------------------------------------
+
+export
+step : Term -> Either Value Term
+step (TVal x)    = Left x
+step (TIf i t e) =
+  case step i of
+    Left VTrue  => Right t
+    Left VFalse => Right e
+    Right x     => Right (TIf x t e)
+
+export
+eval : Term -> Value
+eval t =
+  case step t of
+    Left v  => v
+    Right x => eval (assert_smaller t x)
+
+--------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------
 

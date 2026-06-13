@@ -135,10 +135,20 @@ example =
      then 100
      else (pred 0b10011)
   """
+
 export
-testTerm : String -> IO ()
-testTerm =
+testParse : String -> IO ()
+testParse =
   putStrLn . either interpolate interpolate . parseString term Virtual
+
+export
+testEval : String -> IO ()
+testEval s =
+  case parseString term Virtual s of
+    Left err => putStrLn "\{err}"
+    Right t  => case eval t of
+      Left  t2 => putStrLn "STUCK: \{t2}"
+      Right v => putStrLn "\{v}"
 
 --------------------------------------------------------------------------------
 -- Proofs
