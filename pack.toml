@@ -2,3 +2,6 @@
 type   = "local"
 path   = "."
 ipkg   = "tpl.ipkg"
+
+[custom.all]
+ilex.commit = "latest:main"

@@ -66,9 +66,13 @@ Interpolation Value where
   interpolate VTrue  = "true"
   interpolate VFalse = "false"
 
+paren : Term -> String
+
 pretty : Term -> String
 pretty (TVal v)    = interpolate v
-pretty (TIf i t e) = "if \{pretty i} then \{pretty t} else \{pretty e}"
+pretty (TIf i t e) = "if \{paren i} then \{paren t} else \{paren e}"
+
+paren x = if isConst x then pretty x else "(\{pretty x})"
 
 export %inline
 Interpolation Term where interpolate = pretty
