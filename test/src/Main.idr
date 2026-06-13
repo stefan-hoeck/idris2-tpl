@@ -1,5 +1,6 @@
 module Main
 
+import ArExp
 import BoolExp
 import Hedgehog
 
@@ -8,5 +9,6 @@ import Hedgehog
 main : IO ()
 main =
   test
-    [ BoolExp.props
+    [ ArExp.props
+    , BoolExp.props
     ]
