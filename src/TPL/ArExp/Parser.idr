@@ -75,21 +75,25 @@ parameters {auto sk : SK q}
 spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
 spaced x = dfa . jsonSpaced x
 
+atom : Steps q PSz SK
+atom =
+  [ cexpr (like "true")  (dact $ onTerm (bool True))
+  , cexpr (like "false") (dact $ onTerm (bool False))
+  , conv (like "0b" >> binary) (onInt . binary . drop 2)
+  , conv (like "0o" >> octal) (onInt . octal . drop 2)
+  , conv (like "0x" >> hexadecimal) (onInt . hexadecimal . drop 2)
+  , conv decimal (dact . onTerm . int . decimal)
+  , copen '(' (dpush0 POpn)
+  ]
+
 value : PState s -> DFA q PSz SK
 value x =
-  spaced x
-    [ cexpr "true"  (dact $ onTerm (bool True))
-    , cexpr "false" (dact $ onTerm (bool False))
-    , cexpr "if" (dpush0 PIf)
-    , cexpr "succ" (dpush0 PSucc)
-    , cexpr "pred" (dpush0 PPred)
-    , cexpr "iszero" (dpush0 PIsZ)
-    , conv (like "0b" >> binary) (onInt . binary . drop 2)
-    , conv (like "0o" >> octal) (onInt . octal . drop 2)
-    , conv (like "0x" >> hexadecimal) (onInt . hexadecimal . drop 2)
-    , conv decimal (dact . onTerm . int . decimal)
-    , copen '(' (dpush0 POpn)
-    ]
+  spaced x $
+    [ cexpr (like "if")     (dpush0 PIf)
+    , cexpr (like "succ")   (dpush0 PSucc)
+    , cexpr (like "pred")   (dpush0 PPred)
+    , cexpr (like "iszero") (dpush0 PIsZ)
+    ] ++ atom
 
 ptrans : Lex1 q PSz SK
 ptrans =
@@ -99,17 +103,19 @@ ptrans =
     , entry PIf    $ value PIf
     , entry PThen  $ value PThen
     , entry PElse  $ value PElse
-    , entry PSucc  $ value PSucc
-    , entry PPred  $ value PPred
-    , entry PIsZ   $ value PIsZ
+    , entry PSucc  $ spaced PSucc atom
+    , entry PPred  $ spaced PPred atom
+    , entry PIsZ   $ spaced PIsZ atom
     , entry PCls   $ spaced PCls [cclose ')' $ dact onClose]
-    , entry PIfV   $ spaced PIfV [cexpr "then" $ dact onThen]
-    , entry PThenV $ spaced PThenV [cexpr "else" $ dact onElse]
+    , entry PIfV   $ spaced PIfV [cexpr (like "then") $ dact onThen]
+    , entry PThenV $ spaced PThenV [cexpr (like "else") $ dact onElse]
     ]
 
+atms : List String
+atms = ["true", "false", "0", "("]
+
 values : List String
-values =
-  ["if", "true", "false", "succ", "pred", "iszero", "0", "("]
+values = ["if", "succ", "pred", "iszero"] ++ atms
 
 perr : Arr32 PSz (SK q -> F1 q (BoundedErr Void))
 perr =
@@ -117,6 +123,9 @@ perr =
     [ entry PIfV   $ unexpected ["then"]
     , entry PThenV $ unexpected ["else"]
     , entry PCls   $ unclosedIfEOI "(" [")"]
+    , entry PSucc  $ unexpected atms
+    , entry PPred  $ unexpected atms
+    , entry PIsZ   $ unexpected atms
     ]
 
 peoi : Index PSz -> SK q -> F1 q (Either (BoundedErr Void) Term)
@@ -124,6 +133,29 @@ peoi st sk t =
  let (PTerm:>[x]) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
   in Right x # t
 
+||| Syntax for arithmetic terms (ABNF)
+|||
+||| Terms:
+|||   term        = atom / func / "if" ws term ws "then" ws term ws "else" ws term
+|||   func        = funname ws atom
+|||   atom        = "true" / "false" / nat / "(" ws term ws ")"
+|||   funname     = "succ" / "pred" / "iszero"
+|||
+||| Literals:
+|||   nat         = decimal / binary / octal / hexadecimal
+|||   binary      = "0b" *1bit
+|||   octal       = "0o" *1octit
+|||   hexadecimal = "0x" *1hexit
+|||   decimal     = "0" / nonzero *digit
+|||   bit         = %x30 / %x31; '0' or '1'
+|||   octit       = %x30-37; '0' to '7'
+|||   nonzero     = %x31-39; '1' to '9'
+|||   digit       = %x30-39; '0' to '9'
+|||   hexit       = digit / "a" / "b" / "c" / "d" / "e" / "f"
+|||
+||| White space:
+|||   ws          = *wschar
+|||   wschar      = %x0a / %x0d / %x09 / %x20
 public export
 term : P1 q (BoundedErr Void) Term
 term = P (cast PIni) (init $ PIni:>[]) ptrans (\x => (Nothing #)) perr peoi
