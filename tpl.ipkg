@@ -14,6 +14,7 @@ modules    = TPL.BoolExp.Parser
            , TPL.ArExp.Parser
            , TPL.ArExp.Term
 
+           , TPL.Lambda.Parser
            , TPL.Lambda.Term
 
 sourcedir  = "src"

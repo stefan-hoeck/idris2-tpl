@@ -26,6 +26,15 @@ data Term : Type where
 public export %inline
 FromString Term where fromString = TVar . fromString
 
+export
+appAll : Term -> List Term -> Term
+appAll s []      = s
+appAll s (t::ts) = appAll (TApp s t) ts
+
+export %inline
+appAllSnoc : Term -> SnocList Term -> Term
+appAllSnoc s = appAll s . (<>>[])
+
 --------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------
