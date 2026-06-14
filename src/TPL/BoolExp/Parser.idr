@@ -12,17 +12,17 @@ import public TPL.BoolExp.Term
 -- Parser Stack
 --------------------------------------------------------------------------------
 
-data PState : List Type -> Type where
-  PIni   : PState []
-  POpn   : PState []
-  PCls   : PState [Term]
-  PIf    : PState []
-  PIfV   : PState [Term]
-  PThen  : PState [Term]
-  PThenV : PState [Term,Term]
-  PElse  : PState [Term,Term]
-  PTerm  : PState [Term]
-  PErr   : PState []
+data PState : SnocList Type -> Type where
+  PIni   : PState [<]
+  POpn   : PState [<]
+  PCls   : PState [<Term]
+  PIf    : PState [<]
+  PIfV   : PState [<Term]
+  PThen  : PState [<Term]
+  PThenV : PState [<Term,Term]
+  PElse  : PState [<Term,Term]
+  PTerm  : PState [<Term]
+  PErr   : PState [<]
 
 %runElab deriveIndexed "PState" [Show,ConIndex]
 
@@ -41,25 +41,25 @@ SK = DStack PState Void
 
 parameters {auto sk : SK q}
   onTerm : Term -> StateAct q PState PSz
-  onTerm trm POpn   x               t = dput PCls (trm::x) t
-  onTerm trm PIni   x               t = dput PTerm [trm] t
-  onTerm trm PIf    x               t = dput PIfV (trm::x) t
-  onTerm trm PThen  x               t = dput PThenV (trm::x) t
-  onTerm trm PElse  [x,y]           t = dput PTerm [TIf y x trm] t
-  onTerm trm PElse  (x::y::pst:>st) t = onTerm (TIf y x trm) pst st t
-  onTerm trm st     x               t = derr PErr st x t
+  onTerm trm POpn   sx              t = dput PCls (sx:<trm) t
+  onTerm trm PIni   sx              t = dput PTerm [<trm] t
+  onTerm trm PIf    sx              t = dput PIfV (sx:<trm) t
+  onTerm trm PThen  sx              t = dput PThenV (sx:<trm) t
+  onTerm trm PElse  [<x,y]          t = dput PTerm [<TIf x y trm] t
+  onTerm trm PElse  (sx:>pst:<x:<y) t = onTerm (TIf x y trm) pst sx t
+  onTerm trm st     sx              t = derr PErr sx st t
 
   onThen : StateAct q PState PSz
-  onThen PIfV x t = dput PThen x t
-  onThen st   x t = derr PErr st x t
+  onThen PIfV sx t = dput PThen sx t
+  onThen st   sx t = derr PErr sx st t
 
   onElse : StateAct q PState PSz
-  onElse PThenV x t = dput PElse x t
-  onElse st     x t = derr PErr st x t
+  onElse PThenV sx t = dput PElse sx t
+  onElse st     sx t = derr PErr sx st t
 
   onClose : StateAct q PState PSz
-  onClose PCls (v::st:>x) t = onTerm v st x t
-  onClose st   x          t = derr PErr st x t
+  onClose PCls (sx:>st:<v) t = onTerm v st sx t
+  onClose st   sx          t = derr PErr sx st t
 
 %inline
 spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
@@ -102,12 +102,12 @@ perr =
 
 peoi : Index PSz -> SK q -> F1 q (Either (BoundedErr Void) Term)
 peoi st sk t =
- let (PTerm:>[x]) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
+ let ([<x]:>PTerm) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
   in Right x # t
 
 public export
 term : P1 q (BoundedErr Void) Term
-term = P (cast PIni) (init $ PIni:>[]) ptrans (\x => (Nothing #)) perr peoi
+term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
 example : String
 example =

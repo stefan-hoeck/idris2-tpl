@@ -13,20 +13,20 @@ import public TPL.ArExp.Term
 -- Parser Stack
 --------------------------------------------------------------------------------
 
-data PState : List Type -> Type where
-  PIni   : PState []
-  POpn   : PState []
-  PIsZ   : PState []
-  PSucc  : PState []
-  PIf    : PState []
-  PPred  : PState []
-  PCls   : PState [Term]
-  PIfV   : PState [Term]
-  PThen  : PState [Term]
-  PThenV : PState [Term,Term]
-  PElse  : PState [Term,Term]
-  PTerm  : PState [Term]
-  PErr   : PState []
+data PState : SnocList Type -> Type where
+  PIni   : PState [<]
+  POpn   : PState [<]
+  PIsZ   : PState [<]
+  PSucc  : PState [<]
+  PIf    : PState [<]
+  PPred  : PState [<]
+  PCls   : PState [<Term]
+  PIfV   : PState [<Term]
+  PThen  : PState [<Term]
+  PThenV : PState [<Term,Term]
+  PElse  : PState [<Term,Term]
+  PTerm  : PState [<Term]
+  PErr   : PState [<]
 
 %runElab deriveIndexed "PState" [Show,ConIndex]
 
@@ -45,31 +45,31 @@ SK = DStack PState Void
 
 parameters {auto sk : SK q}
   onTerm : Term -> StateAct q PState PSz
-  onTerm trm POpn   x               t = dput PCls (trm::x) t
-  onTerm trm PIni   x               t = dput PTerm [trm] t
-  onTerm trm PIf    x               t = dput PIfV (trm::x) t
-  onTerm trm PThen  x               t = dput PThenV (trm::x) t
-  onTerm trm PSucc  (pst:>st)       t = onTerm (TSucc trm) pst st t
-  onTerm trm PPred  (pst:>st)       t = onTerm (TPred trm) pst st t
-  onTerm trm PIsZ   (pst:>st)       t = onTerm (TIsZ trm) pst st t
-  onTerm trm PElse  [x,y]           t = dput PTerm [TIf y x trm] t
-  onTerm trm PElse  (x::y::pst:>st) t = onTerm (TIf y x trm) pst st t
-  onTerm trm st     x               t = derr PErr st x t
+  onTerm trm POpn   sx              t = dput PCls (sx:<trm) t
+  onTerm trm PIni   sx              t = dput PTerm [<trm] t
+  onTerm trm PIf    sx              t = dput PIfV (sx:<trm) t
+  onTerm trm PThen  sx              t = dput PThenV (sx:<trm) t
+  onTerm trm PSucc  (sx:>pst)       t = onTerm (TSucc trm) pst sx t
+  onTerm trm PPred  (sx:>pst)       t = onTerm (TPred trm) pst sx t
+  onTerm trm PIsZ   (sx:>pst)       t = onTerm (TIsZ trm) pst sx t
+  onTerm trm PElse  [<x,y]          t = dput PTerm [<TIf x y trm] t
+  onTerm trm PElse  (sx:>pst:<x:<y) t = onTerm (TIf x y trm) pst sx t
+  onTerm trm st     sx              t = derr PErr sx st t
 
   onInt : Integer -> F1 q (Index PSz)
   onInt = dact . onTerm . int
 
   onThen : StateAct q PState PSz
-  onThen PIfV x t = dput PThen x t
-  onThen st   x t = derr PErr st x t
+  onThen PIfV sx t = dput PThen sx t
+  onThen st   sx t = derr PErr sx st t
 
   onElse : StateAct q PState PSz
-  onElse PThenV x t = dput PElse x t
-  onElse st     x t = derr PErr st x t
+  onElse PThenV sx t = dput PElse sx t
+  onElse st     sx t = derr PErr sx st t
 
   onClose : StateAct q PState PSz
-  onClose PCls (v::st:>x) t = onTerm v st x t
-  onClose st   x          t = derr PErr st x t
+  onClose PCls (sx:>st:<v) t = onTerm v st sx t
+  onClose st   sx          t = derr PErr sx st t
 
 %inline
 spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
@@ -130,7 +130,7 @@ perr =
 
 peoi : Index PSz -> SK q -> F1 q (Either (BoundedErr Void) Term)
 peoi st sk t =
- let (PTerm:>[x]) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
+ let ([<x]:>PTerm) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
   in Right x # t
 
 ||| Syntax for arithmetic terms (ABNF)
@@ -158,7 +158,7 @@ peoi st sk t =
 |||   wschar      = %x0a / %x0d / %x09 / %x20
 public export
 term : P1 q (BoundedErr Void) Term
-term = P (cast PIni) (init $ PIni:>[]) ptrans (\x => (Nothing #)) perr peoi
+term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
 example : String
 example =
