@@ -1,10 +1,9 @@
 module TPL.ArExp.Parser
 
 import Derive.Prelude
-import Text.ILex
-import Text.ILex.DStack
-import public TPL.ArExp.Term
+import TPL.Parser.Util
 import public TPL.ArExp.TT
+import public TPL.ArExp.Term
 
 %default total
 %hide Data.Linear.(.)
@@ -78,14 +77,9 @@ spaced x = dfa . jsonSpaced x
 
 atom : Steps q PSz SK
 atom =
-  [ cexpr (like "true")  (dact $ onTerm (bool True))
-  , cexpr (like "false") (dact $ onTerm (bool False))
-  , conv (like "0b" >> binary) (onInt . binary . drop 2)
-  , conv (like "0o" >> octal) (onInt . octal . drop 2)
-  , conv (like "0x" >> hexadecimal) (onInt . hexadecimal . drop 2)
-  , conv decimal (dact . onTerm . int . decimal)
-  , copen '(' (dpush0 POpn)
-  ]
+     copen '(' (dpush0 POpn)
+  :: bools (dact . onTerm . cast)
+  ++ nats onInt
 
 value : PState s -> DFA q PSz SK
 value x =

@@ -1,8 +1,7 @@
 module TPL.Lambda.Parser
 
 import Derive.Prelude
-import Text.ILex
-import Text.ILex.DStack
+import TPL.Parser.Util
 import public TPL.Lambda.Term
 
 %default total
@@ -73,11 +72,8 @@ parameters {auto sk : SK q}
 spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
 spaced x = dfa . jsonSpaced x
 
-idents : Steps q PSz SK
-idents = [read (alpha >> star alphaNum) (dact . onVar . V)]
-
 atoms : Steps q PSz SK
-atoms = copen '(' (dpush0 POpn) :: idents
+atoms = copen '(' (dpush0 POpn) :: (idents $ dact . onVar . V)
 
 terms : Steps q PSz SK
 terms = conv ('\\' <|> 'λ') (const $ dpush0 PLam) :: atoms
@@ -92,7 +88,7 @@ ptrans =
     , entry PIniT  $ spaced PIniT atomOrClose
     , entry POpn   $ spaced POpn terms
     , entry POpnT  $ spaced POpnT atomOrClose
-    , entry PLam   $ spaced PLam idents
+    , entry PLam   $ spaced PLam (idents $ dact . onVar . V)
     , entry PLamV  $ spaced PLamV [cexpr' '.' PLamD]
     , entry PLamD  $ spaced PLamD terms
     , entry PLamT  $ spaced PLamT atomOrClose
