@@ -13,6 +13,7 @@ modules    = TPL.BoolExp.Parser
 
            , TPL.ArExp.Parser
            , TPL.ArExp.Term
+           , TPL.ArExp.TT
 
            , TPL.Lambda.Parser
            , TPL.Lambda.Term

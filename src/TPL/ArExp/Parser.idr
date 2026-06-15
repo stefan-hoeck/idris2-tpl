@@ -4,6 +4,7 @@ import Derive.Prelude
 import Text.ILex
 import Text.ILex.DStack
 import public TPL.ArExp.Term
+import public TPL.ArExp.TT
 
 %default total
 %hide Data.Linear.(.)
@@ -178,9 +179,10 @@ testEval : String -> IO ()
 testEval s =
   case parseString term Virtual s of
     Left err => putStrLn "\{err}"
-    Right t  => case eval t of
-      Left  t2 => putStrLn "STUCK: \{t2}"
-      Right v => putStrLn "\{v}"
+    Right t  => case typeCheck t of
+      Left msg           => putStrLn msg
+      Right (TNat ** t)  => printLn (eval t)
+      Right (TBool ** t) => printLn (eval t)
 
 --------------------------------------------------------------------------------
 -- Proofs
