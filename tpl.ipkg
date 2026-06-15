@@ -19,6 +19,8 @@ modules    = TPL.BoolExp.Parser
            , TPL.Name.Scope
            , TPL.Name.Var
 
+           , TPL.Parser.Util
+
            , TPL.Lambda.Parser
            , TPL.Lambda.Term
 
