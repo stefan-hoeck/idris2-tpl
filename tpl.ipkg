@@ -15,6 +15,10 @@ modules    = TPL.BoolExp.Parser
            , TPL.ArExp.Term
            , TPL.ArExp.TT
 
+           , TPL.Name
+           , TPL.Name.Scope
+           , TPL.Name.Var
+
            , TPL.Lambda.Parser
            , TPL.Lambda.Term
 
