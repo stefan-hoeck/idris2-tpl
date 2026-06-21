@@ -71,39 +71,38 @@ parameters {auto sk : SK q}
   onClose PCls (sx:>st:<v) t = onTerm v st sx t
   onClose st   sx          t = derr PErr sx st t
 
-%inline
-spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
-spaced x = dfa . jsonSpaced x
-
-atom : Steps q PSz SK
-atom =
-     copen '(' (dpush0 POpn)
+atomSteps : Steps q PSz SK
+atomSteps =
+     opn '(' (dpush0 POpn)
   :: bools (dact . onTerm . cast)
   ++ nats onInt
 
-value : PState s -> DFA q PSz SK
-value x =
-  spaced x $
-    [ cexpr (like "if")     (dpush0 PIf)
-    , cexpr (like "succ")   (dpush0 PSucc)
-    , cexpr (like "pred")   (dpush0 PPred)
-    , cexpr (like "iszero") (dpush0 PIsZ)
-    ] ++ atom
+atom : DFA q PSz SK
+atom = spaced atomSteps
+
+value : DFA q PSz SK
+value =
+  spaced $
+    [ step (like "if")     (dpush0 PIf)
+    , step (like "succ")   (dpush0 PSucc)
+    , step (like "pred")   (dpush0 PPred)
+    , step (like "iszero") (dpush0 PIsZ)
+    ] ++ atomSteps
 
 ptrans : Lex1 q PSz SK
 ptrans =
   lex1
-    [ entry PIni   $ value PIni
-    , entry POpn   $ value POpn
-    , entry PIf    $ value PIf
-    , entry PThen  $ value PThen
-    , entry PElse  $ value PElse
-    , entry PSucc  $ spaced PSucc atom
-    , entry PPred  $ spaced PPred atom
-    , entry PIsZ   $ spaced PIsZ atom
-    , entry PCls   $ spaced PCls [cclose ')' $ dact onClose]
-    , entry PIfV   $ spaced PIfV [cexpr (like "then") $ dact onThen]
-    , entry PThenV $ spaced PThenV [cexpr (like "else") $ dact onElse]
+    [ entry PIni     value
+    , entry POpn     value
+    , entry PIf      value
+    , entry PThen    value
+    , entry PElse    value
+    , entry PSucc    atom
+    , entry PPred    atom
+    , entry PIsZ     atom
+    , entry PCls   $ spaced [close ')' $ dact onClose]
+    , entry PIfV   $ spaced [step (like "then") $ dact onThen]
+    , entry PThenV $ spaced [step (like "else") $ dact onElse]
     ]
 
 atms : List String
@@ -112,7 +111,7 @@ atms = ["true", "false", "0", "("]
 values : List String
 values = ["if", "succ", "pred", "iszero"] ++ atms
 
-perr : Arr32 PSz (SK q -> F1 q (BoundedErr Void))
+perr : Arr32 PSz (SK q -> F1 q (BBErr Void))
 perr =
   arr32 PSz (unexpected values)
     [ entry PIfV   $ unexpected ["then"]
@@ -123,7 +122,7 @@ perr =
     , entry PIsZ   $ unexpected atms
     ]
 
-peoi : Index PSz -> SK q -> F1 q (Either (BoundedErr Void) Term)
+peoi : Index PSz -> SK q -> F1 q (Either (BBErr Void) Term)
 peoi st sk t =
  let ([<x]:>PTerm) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
   in Right x # t
@@ -152,7 +151,7 @@ peoi st sk t =
 |||   ws          = *wschar
 |||   wschar      = %x0a / %x0d / %x09 / %x20
 public export
-term : P1 q (BoundedErr Void) Term
+term : P1 q (BBErr Void) Term
 term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
 example : String

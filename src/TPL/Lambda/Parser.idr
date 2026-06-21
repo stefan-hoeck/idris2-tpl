@@ -68,33 +68,29 @@ parameters {auto sk : SK q}
     onCloseT (TLam v $ appAllSnoc s ss) st sx t
   onClose st    sx                 t = derr PErr sx st t
 
-%inline
-spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
-spaced x = dfa . jsonSpaced x
-
 atoms : Steps q PSz SK
-atoms = copen '(' (dpush0 POpn) :: (idents $ dact . onVar . V)
+atoms = opn '(' (dpush0 POpn) :: (idents $ dact . onVar . V)
 
-terms : Steps q PSz SK
-terms = conv ('\\' <|> 'λ') (const $ dpush0 PLam) :: atoms
+terms : DFA q PSz SK
+terms = spaced $ step ('\\' <|> 'λ') (dpush0 PLam) :: atoms
 
-atomOrClose : Steps q PSz SK
-atomOrClose = cclose ')' (dact onClose) :: atoms
+atomOrClose : DFA q PSz SK
+atomOrClose = spaced $ close ')' (dact onClose) :: atoms
 
 ptrans : Lex1 q PSz SK
 ptrans =
   lex1
-    [ entry PIni   $ spaced PIni terms
-    , entry PIniT  $ spaced PIniT atomOrClose
-    , entry POpn   $ spaced POpn terms
-    , entry POpnT  $ spaced POpnT atomOrClose
-    , entry PLam   $ spaced PLam (idents $ dact . onVar . V)
-    , entry PLamV  $ spaced PLamV [cexpr' '.' PLamD]
-    , entry PLamD  $ spaced PLamD terms
-    , entry PLamT  $ spaced PLamT atomOrClose
+    [ entry PIni     terms
+    , entry PIniT    atomOrClose
+    , entry POpn     terms
+    , entry POpnT  $ atomOrClose
+    , entry PLam   $ spaced (idents $ dact . onVar . V)
+    , entry PLamV  $ spaced [step' '.' PLamD]
+    , entry PLamD    terms
+    , entry PLamT  $ atomOrClose
     ]
 
-perr : Arr32 PSz (SK q -> F1 q (BoundedErr Void))
+perr : Arr32 PSz (SK q -> F1 q (BBErr Void))
 perr =
   arr32 PSz (unexpected [])
     [ entry POpnT  $ unclosedIfEOI "(" [")"]
@@ -113,7 +109,7 @@ reduce ([<s,ss]:>PIniT)      = Just (appAllSnoc s ss)
 reduce (sx:<v:<s:<ss:>PLamT) = reduceT sx (TLam v $ appAllSnoc s ss)
 reduce _                     = Nothing
 
-peoi : Index PSz -> SK q -> F1 q (Either (BoundedErr Void) Term)
+peoi : Index PSz -> SK q -> F1 q (Either (BBErr Void) Term)
 peoi st sk t =
  let sx # t := read1 sk.stack_ t
   in case reduce sx of
@@ -121,7 +117,7 @@ peoi st sk t =
        Nothing => arrFail SK perr st sk t
 
 public export
-term : P1 q (BoundedErr Void) Term
+term : P1 q (BBErr Void) Term
 term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
 example : String

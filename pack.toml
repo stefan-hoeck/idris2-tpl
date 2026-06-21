@@ -5,4 +5,7 @@ ipkg   = "tpl.ipkg"
 test   = "test/test.ipkg"
 
 [custom.all]
-ilex.commit = "latest:main"
+ilex-debug.commit   = "latest:main"
+ilex-core.commit    = "latest:main"
+ilex.commit         = "latest:main"
+ilex-streams.commit = "latest:main"
