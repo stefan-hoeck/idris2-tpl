@@ -1,8 +1,7 @@
 module TPL.BoolExp.Parser
 
 import Derive.Prelude
-import Text.ILex
-import Text.ILex.DStack
+import TPL.Parser.Util
 import public TPL.BoolExp.Term
 
 %default total
@@ -61,33 +60,29 @@ parameters {auto sk : SK q}
   onClose PCls (sx:>st:<v) t = onTerm v st sx t
   onClose st   sx          t = derr PErr sx st t
 
-%inline
-spaced : PState s -> Steps q PSz SK -> DFA q PSz SK
-spaced x = dfa . jsonSpaced x
-
-value : PState s -> DFA q PSz SK
-value x =
-  spaced x
-    [ cexpr "true"  (dact $ onTerm (bool True))
-    , cexpr "false" (dact $ onTerm (bool False))
-    , cexpr "if" (dpush0 PIf)
-    , copen '(' (dpush0 POpn)
+value : DFA q PSz SK
+value =
+  spaced
+    [ step "true"  (dact $ onTerm (bool True))
+    , step "false" (dact $ onTerm (bool False))
+    , step "if" (dpush0 PIf)
+    , opn '(' (dpush0 POpn)
     ]
 
 ptrans : Lex1 q PSz SK
 ptrans =
   lex1
-    [ entry PIni   $ value PIni
-    , entry POpn   $ value POpn
-    , entry PIf    $ value PIf
-    , entry PThen  $ value PThen
-    , entry PElse  $ value PElse
-    , entry PCls   $ spaced PCls [cclose ')' $ dact onClose]
-    , entry PIfV   $ spaced PIfV [cexpr "then" $ dact onThen]
-    , entry PThenV $ spaced PThenV [cexpr "else" $ dact onElse]
+    [ entry PIni   $ value
+    , entry POpn   $ value
+    , entry PIf    $ value
+    , entry PThen  $ value
+    , entry PElse  $ value
+    , entry PCls   $ spaced [close ')' $ dact onClose]
+    , entry PIfV   $ spaced [step "then" $ dact onThen]
+    , entry PThenV $ spaced [step "else" $ dact onElse]
     ]
 
-perr : Arr32 PSz (SK q -> F1 q (BoundedErr Void))
+perr : Arr32 PSz (SK q -> F1 q (BBErr Void))
 perr =
   errs
     [ entry PIni   $ unexpected ["if", "true", "false", "("]
@@ -100,13 +95,13 @@ perr =
     , entry PCls   $ unclosedIfEOI "(" [")"]
     ]
 
-peoi : Index PSz -> SK q -> F1 q (Either (BoundedErr Void) Term)
+peoi : Index PSz -> SK q -> F1 q (Either (BBErr Void) Term)
 peoi st sk t =
  let ([<x]:>PTerm) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
   in Right x # t
 
 public export
-term : P1 q (BoundedErr Void) Term
+term : P1 q (BBErr Void) Term
 term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
 example : String

@@ -30,23 +30,22 @@ ident = (alpha <|> '_') >> star (alphaNum <|> '_' <|> '\'')
 -- Literals
 --------------------------------------------------------------------------------
 
-parameters {auto hp : HasPosition sk}
-           {auto hb : HasBytes sk}
+parameters {auto hb : HasBytes s}
 
   export %inline
-  nats : (f : sk q => Integer -> F1 q (Index sz)) -> Steps q sz sk
+  nats : (f : s q => Integer -> F1 q (Index sz)) -> Steps q sz s
   nats f =
-    [ conv binNat (f . binary . drop 2)
-    , conv octNat (f . octal . drop 2)
-    , conv hexNat (f . hexadecimal . drop 2)
-    , conv decimal (f . decimal)
+    [ bytes binNat (f . binary . drop 2)
+    , bytes octNat (f . octal . drop 2)
+    , bytes hexNat (f . hexadecimal . drop 2)
+    , bytes decimal (f . decimal)
     ]
 
   export %inline
-  bools : (f : sk q => Bool -> F1 q (Index sz)) -> Steps q sz sk
+  bools : (f : s q => Bool -> F1 q (Index sz)) -> Steps q sz s
   bools f =
-    [ cexpr (like "true") (f True)
-    , cexpr (like "false") (f False)
+    [ step (like "true") (f True)
+    , step (like "false") (f False)
     ]
 
 --------------------------------------------------------------------------------
@@ -54,5 +53,13 @@ parameters {auto hp : HasPosition sk}
 --------------------------------------------------------------------------------
 
   export %inline
-  idents : (f : sk q => String -> F1 q (Index sz)) -> Steps q sz sk
-  idents f = [read ident f]
+  idents : (f : s q => String -> F1 q (Index sz)) -> Steps q sz s
+  idents f = [string ident f]
+
+--------------------------------------------------------------------------------
+-- Utilities
+--------------------------------------------------------------------------------
+
+  export %inline
+  spaced : Steps q r s -> DFA q r s
+  spaced = dfa . jsonSpaced
