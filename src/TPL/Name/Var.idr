@@ -43,9 +43,13 @@ record Var (sc : Scope) where
   constructor V
   pos    : Nat
   0 name : VarName
-  0 prf  : IsVar n name sc
+  0 prf  : IsVar pos name sc
 
 ||| Tries to find a name in a scope and convert it to a de Bruijn index.
 export
 mkVar : (sc : Scope) -> VarName -> Maybe (Var sc)
 mkVar sc nm = (\(Element n prf) => V n nm prf) <$> mkIsVar sc nm
+
+export
+{sc : _} -> Interpolation (Var sc) where
+  interpolate (V pos _ p) = "\{getName sc pos @{p}} (\{show pos})"

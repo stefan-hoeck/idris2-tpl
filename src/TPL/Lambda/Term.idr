@@ -1,24 +1,15 @@
 module TPL.Lambda.Term
 
+import TPL.Name.Var
 import Derive.Prelude
 
 %default total
 %language ElabReflection
 
 public export
-record Var where
-  constructor V
-  name : String
-
-%runElab derive "Var" [Show,Eq,Ord,FromString,Semigroup,Monoid]
-
-public export %inline
-Interpolation Var where interpolate = name
-
-public export
 data Term : Type where
-  TVar : (v : Var) -> Term -- a plain variable
-  TLam : (v : Var) -> (sc : Term) -> Term -- variable and its scope
+  TVar : (v : VarName) -> Term -- a plain variable
+  TLam : (v : VarName) -> (sc : Term) -> Term -- variable and its scope
   TApp : (t,s : Term) -> Term -- function application
 
 %runElab derive "Term" [Show,Eq]
@@ -54,3 +45,43 @@ appR t        = "(\{pretty t})"
 
 export %inline
 Interpolation Term where interpolate = pretty
+
+--------------------------------------------------------------------------------
+-- Scoped Term
+--------------------------------------------------------------------------------
+
+public export
+data STerm : (sc : Scope) -> Type where
+  SVar : Var sc -> STerm sc
+  SLam : (x : VarName) -> STerm (sc:<x) -> STerm sc
+  SApp : (t,s : STerm sc) -> STerm sc
+
+export
+scoped : {sc : _} -> Term -> Maybe (STerm sc)
+scoped (TVar v)   = SVar <$> mkVar sc v
+scoped (TLam v x) = SLam v <$> scoped x
+scoped (TApp t s) = [| SApp (scoped t) (scoped s) |]
+
+export %inline
+closed : Term -> Maybe (STerm [<])
+closed = scoped
+
+--------------------------------------------------------------------------------
+-- Pretty Printing
+--------------------------------------------------------------------------------
+
+sappL, sappR : {sc : _} -> STerm sc -> String
+
+spretty : {sc : _} -> STerm sc -> String
+spretty (SVar v)    = interpolate v
+spretty (SLam v sc) = "λ\{v}. \{spretty sc}"
+spretty (SApp t s)  = "\{sappL t} \{sappR s}"
+
+sappL l@(SLam {}) = "(\{spretty l})"
+sappL t           = spretty t
+
+sappR (SVar v) = interpolate v
+sappR t        = "(\{spretty t})"
+
+export %inline
+{sc : _} -> Interpolation (STerm sc) where interpolate = spretty

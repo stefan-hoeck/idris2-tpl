@@ -14,5 +14,8 @@ record VarName where
 %runElab derive "VarName" [Show,Eq,Ord,FromString,Semigroup,Monoid]
 
 export %inline
+Interpolation VarName where interpolate = name
+
+export %inline
 HDecEq VarName where
   hdecEq (VN x) (VN y) = maybeCong VN (hdecEq x y)

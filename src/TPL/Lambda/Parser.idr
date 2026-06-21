@@ -19,9 +19,9 @@ data PState : SnocList Type -> Type where
   POpn   : PState [<]
   POpnT  : PState [<Term,SnocList Term]
   PLam   : PState [<]
-  PLamV  : PState [<Var]
+  PLamV  : PState [<VarName]
   PLamD  : PState [<Void]
-  PLamT  : PState [<Var,Term,SnocList Term]
+  PLamT  : PState [<VarName,Term,SnocList Term]
   PErr   : PState [<]
 
 %runElab deriveIndexed "PState" [Show,ConIndex]
@@ -49,7 +49,7 @@ parameters {auto sk : SK q}
   onTerm s PLamT (sx:<ss) t = dput PLamT (sx:<(ss:<s)) t
   onTerm s st sx          t = derr PErr sx st t
 
-  onVar : Var -> StateAct q PState PSz
+  onVar : VarName -> StateAct q PState PSz
   onVar v PLam sx t = dput PLamV (sx:<v) t
   onVar v st   sx t = onTerm (TVar v) st sx t
 
@@ -69,7 +69,7 @@ parameters {auto sk : SK q}
   onClose st    sx                 t = derr PErr sx st t
 
 atoms : Steps q PSz SK
-atoms = opn '(' (dpush0 POpn) :: (idents $ dact . onVar . V)
+atoms = opn '(' (dpush0 POpn) :: (varName $ dact . onVar)
 
 terms : DFA q PSz SK
 terms = spaced $ step ('\\' <|> 'λ') (dpush0 PLam) :: atoms
@@ -84,7 +84,7 @@ ptrans =
     , entry PIniT    atomOrClose
     , entry POpn     terms
     , entry POpnT  $ atomOrClose
-    , entry PLam   $ spaced (idents $ dact . onVar . V)
+    , entry PLam   $ spaced (varName $ dact . onVar)
     , entry PLamV  $ spaced [step' '.' PLamD]
     , entry PLamD    terms
     , entry PLamT  $ atomOrClose
@@ -129,6 +129,15 @@ export
 testParse : String -> IO ()
 testParse =
   putStrLn . either interpolate interpolate . parseString term Virtual
+
+export
+testScoped : String -> IO ()
+testScoped s =
+  case parseString term Virtual s of
+    Left x  => putStrLn "\{x}"
+    Right t => case closed t of
+      Nothing => putStrLn "variable not in scope"
+      Just st => putStrLn "\{st}"
 
 --------------------------------------------------------------------------------
 -- Proofs
