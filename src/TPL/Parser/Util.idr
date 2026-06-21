@@ -1,5 +1,6 @@
 module TPL.Parser.Util
 
+import public TPL.Name
 import public Text.ILex
 import public Text.ILex.DStack
 
@@ -55,6 +56,10 @@ parameters {auto hb : HasBytes s}
   export %inline
   idents : (f : s q => String -> F1 q (Index sz)) -> Steps q sz s
   idents f = [string ident f]
+
+  export %inline
+  varName : (f : s q => VarName -> F1 q (Index sz)) -> Steps q sz s
+  varName f = [string ident (f . VN)]
 
 --------------------------------------------------------------------------------
 -- Utilities
