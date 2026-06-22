@@ -64,6 +64,14 @@ shiftImpl sol son (SLam x y) = SLam x (shiftImpl (suc sol) son y)
 export %inline
 Shiftable STerm where genShift = shiftImpl
 
+strImpl : GenStrengthen STerm
+strImpl s t (SVar x)   = SVar <$> genStrengthen s t x
+strImpl s t (SApp x y) = [| SApp (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SLam x y) = SLam x <$> strImpl s (suc t) y
+
+export %inline
+Strengthenable STerm where genStrengthen = strImpl
+
 export
 scoped : {sc : _} -> Term -> Maybe (STerm sc)
 scoped (TVar v)   = SVar <$> mkVar sc v
@@ -85,6 +93,27 @@ subst : {sc : _} -> Var sc -> STerm sc -> STerm sc -> STerm sc
 subst v s (SVar x)   = if v == x then s else SVar x
 subst v s (SApp t x) = SApp (subst v s t) (subst v s x)
 subst v s (SLam x y) = SLam x $ subst (shift v) (shift s) y
+
+--------------------------------------------------------------------------------
+-- Evaluation
+--------------------------------------------------------------------------------
+
+export
+step : {sc : _} -> STerm sc -> Maybe (STerm sc)
+step (SApp (SLam x t) s@(SLam {})) =
+  strengthen (suc zero) $ subst zero t (shift s)
+step (SApp t s) =
+  case step t of
+    Just t2 => Just (SApp t2 s)
+    Nothing => SApp t <$> step s
+step _ = Nothing
+
+export covering
+eval : {sc : _} -> STerm sc -> STerm sc
+eval t =
+  case step t of
+    Nothing => t
+    Just t2 => eval t2
 
 --------------------------------------------------------------------------------
 -- Pretty Printing

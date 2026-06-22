@@ -26,6 +26,23 @@ interface Embeddable (0 tm : Scoped) where
   embed : Embed tm
 
 --------------------------------------------------------------------------------
+-- Strengthening
+--------------------------------------------------------------------------------
+
+public export
+0 GenStrengthen : Scoped -> Type
+GenStrengthen tm = {0 outer, ns, vars : Scope} ->
+  SizeOf ns -> SizeOf vars -> tm ((outer++ns)++vars) -> Maybe (tm (outer++vars))
+
+public export
+interface Strengthenable (0 tm : Scoped) where
+  genStrengthen : GenStrengthen tm
+
+export %inline
+strengthen : Strengthenable tm => SizeOf ns -> tm (outer++ns) -> Maybe (tm outer)
+strengthen s = genStrengthen s zero
+
+--------------------------------------------------------------------------------
 -- Shifting
 --------------------------------------------------------------------------------
 
