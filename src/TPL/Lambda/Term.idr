@@ -101,7 +101,7 @@ subst v s (SLam x y) = SLam x $ subst (shift v) (shift s) y
 export
 step : {sc : _} -> STerm sc -> Maybe (STerm sc)
 step (SApp (SLam x t) s@(SLam {})) =
-  strengthen (suc zero) $ subst zero t (shift s)
+  strengthen (suc zero) $ subst zero (shift s) t
 step (SApp t s) =
   case step t of
     Just t2 => Just (SApp t2 s)
