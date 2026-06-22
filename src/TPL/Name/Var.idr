@@ -72,7 +72,6 @@ locateIsVarGE (SO (S k) (S l)) so v =
   case v of
    IS v => locateIsVarGE (SO k l) so v
 
-
 export
 locateIsVar :
      {n : _}
@@ -84,6 +83,21 @@ locateIsVar s v =
   case choose (n < size s) of
     Left  so => Left0 (locateIsVarLT s so v)
     Right so => Right0 (locateIsVarGE s so v)
+
+export
+strengthenIsVar :
+     {n : _}
+  -> {0 outer,ns,vars : Scope}
+  -> (s : SizeOf ns)
+  -> (t : SizeOf vars)
+  -> (0 prf : IsVar n nm ((outer++ns)++vars))
+  -> Maybe (Either0 (IsVar n nm vars) (IsVar (size t + ((n `minus` size t) `minus` size s)) nm (outer++vars)))
+strengthenIsVar s t prf =
+  case locateIsVar t prf of
+    Left0 q  => Just (Left0 q)
+    Right0 q => case locateIsVar s q of
+      Left0 q => Nothing
+      Right0 q => Just (Right0 $ weakenIsVar t q)
 
 --------------------------------------------------------------------------------
 -- Var
@@ -99,6 +113,10 @@ record Var (sc : Scope) where
 
 export %inline
 Eq (Var sc) where V p1 _ _ == V p2 _ _ = p1 == p2
+
+export
+zero : Var (sc:<n)
+zero = V 0 n IZ
 
 ||| Tries to find a name in a scope and convert it to a de Bruijn index.
 export
@@ -133,3 +151,11 @@ Shiftable Var where
     case locateVar sol v of
       Left  v2 => embed v2
       Right v2 => weakenVar sol $ weakenVar son v2
+
+export
+Strengthenable Var where
+  genStrengthen s t (V n nm prf) =
+    case strengthenIsVar s t prf of
+      Just (Left0 q)  => Just (V _ nm $ embedIsVar q)
+      Just (Right0 q) => Just (V _ nm q)
+      Nothing         => Nothing
