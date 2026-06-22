@@ -53,14 +53,22 @@ Interpolation Term where interpolate = pretty
 public export
 data STerm : (sc : Scope) -> Type where
   SVar : Var sc -> STerm sc
-  SLam : (x : VarName) -> STerm (sc:<x) -> STerm sc
   SApp : (t,s : STerm sc) -> STerm sc
+  SLam : (x : VarName) -> STerm (sc:<x) -> STerm sc
+
+shiftImpl : GenShift STerm
+shiftImpl sol son (SVar x)   = SVar (genShift sol son x)
+shiftImpl sol son (SApp t s) = SApp (shiftImpl sol son t) (shiftImpl sol son s)
+shiftImpl sol son (SLam x y) = SLam x (shiftImpl (suc sol) son y)
+
+export %inline
+Shiftable STerm where genShift = shiftImpl
 
 export
 scoped : {sc : _} -> Term -> Maybe (STerm sc)
 scoped (TVar v)   = SVar <$> mkVar sc v
-scoped (TLam v x) = SLam v <$> scoped x
 scoped (TApp t s) = [| SApp (scoped t) (scoped s) |]
+scoped (TLam v x) = SLam v <$> scoped x
 
 export %inline
 closed : Term -> Maybe (STerm [<])
@@ -69,8 +77,14 @@ closed = scoped
 export
 restore : {sc : Scope} -> STerm sc -> Term
 restore (SVar $ V n _ p) = TVar (getName sc n @{p})
-restore (SLam x y)       = TLam x (restore y)
 restore (SApp t s)       = TApp (restore t) (restore s)
+restore (SLam x y)       = TLam x (restore y)
+
+export
+subst : {sc : _} -> Var sc -> STerm sc -> STerm sc -> STerm sc
+subst v s (SVar x)   = if v == x then s else SVar x
+subst v s (SApp t x) = SApp (subst v s t) (subst v s x)
+subst v s (SLam x y) = SLam x $ subst (shift v) (shift s) y
 
 --------------------------------------------------------------------------------
 -- Pretty Printing
@@ -80,8 +94,8 @@ sappL, sappR : {sc : _} -> STerm sc -> String
 
 spretty : {sc : _} -> STerm sc -> String
 spretty (SVar v)    = interpolate v
-spretty (SLam v sc) = "λ\{v}. \{spretty sc}"
 spretty (SApp t s)  = "\{sappL t} \{sappR s}"
+spretty (SLam v sc) = "λ\{v}. \{spretty sc}"
 
 sappL l@(SLam {}) = "(\{spretty l})"
 sappL t           = spretty t
