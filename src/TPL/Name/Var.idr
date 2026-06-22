@@ -43,6 +43,11 @@ export
 embedIsVar IZ     = IZ
 embedIsVar (IS x) = IS (embedIsVar x)
 
+export
+0 weakenIsVar : (s : SizeOf ns) -> IsVar n x xs -> IsVar (size s+n) x (xs++ns)
+weakenIsVar (SO Z Z)         p = p
+weakenIsVar (SO (S k) (S l)) p = IS (weakenIsVar (SO k l) p)
+
 0 locateIsVarLT :
      (s : SizeOf local)
   -> So (n < size s)
@@ -115,6 +120,10 @@ locateVar s (V pos name prf) =
     Right0 q => Right (V _ name q)
 
 export
+weakenVar : (s : SizeOf ns) -> Var outer -> Var (outer++ns)
+weakenVar s (V p nm prf) = V (size s+p) nm (weakenIsVar s prf)
+
+export
 Embeddable Var where
   embed (V p n prf) = V p n (embedIsVar prf)
 
@@ -123,4 +132,4 @@ Shiftable Var where
   genShift sol son v =
     case locateVar sol v of
       Left  v2 => embed v2
-      Right v2 => ?fooo2
+      Right v2 => weakenVar sol $ weakenVar son v2
