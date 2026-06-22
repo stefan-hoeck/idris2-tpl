@@ -1,7 +1,10 @@
 module TPL.Name.Var
 
 import Data.DPair
+import Data.Either0
+import Data.Nat
 import Data.SnocList.HasLength
+import Data.So
 import Decidable.HDecEq
 import public TPL.Name
 import public TPL.Name.LSizeOf
@@ -36,12 +39,46 @@ mkIsVar (sx :< x) nm =
     Nothing0  => (\(Element n iv) => Element (S n) (IS iv)) <$> mkIsVar sx nm
 
 export
-0 shiftVar :
-     {0 outer, ns, local : Scope}
-  -> HasLength sl local
-  -> HasLength sn ns
-  -> IsVar n nm (outer++local)
-  -> IsVar (n+sn+sl) nm ((outer++ns)++local)
+0 embedIsVar : IsVar n nm sc -> IsVar n nm (outer++sc)
+embedIsVar IZ     = IZ
+embedIsVar (IS x) = IS (embedIsVar x)
+
+0 locateIsVarLT :
+     (s : SizeOf local)
+  -> So (n < size s)
+  -> IsVar n x (outer++local)
+  -> IsVar n x local
+locateIsVarLT (SO Z Z) so v =
+  case v of
+    IZ impossible
+    IS v impossible
+locateIsVarLT (SO (S k) (S l)) so v =
+  case v of
+    IZ => IZ
+    IS v => IS (locateIsVarLT (SO k l) so v)
+
+0 locateIsVarGE :
+     (s : SizeOf local)
+  -> So (n >= size s)
+  -> IsVar n x (outer++local)
+  -> IsVar (n `minus` size s) x outer
+locateIsVarGE (SO Z Z) so v = rewrite minusZeroRight n in v
+locateIsVarGE (SO (S k) (S l)) so v =
+  case v of
+   IS v => locateIsVarGE (SO k l) so v
+
+
+export
+locateIsVar :
+     {n : _}
+  -> {0 outer, local : Scope}
+  -> (s : SizeOf local)
+  -> (0 prf : IsVar n nm (outer++local))
+  -> Either0 (IsVar n nm local) (IsVar (n `minus` size s) nm outer)
+locateIsVar s v =
+  case choose (n < size s) of
+    Left  so => Left0 (locateIsVarLT s so v)
+    Right so => Right0 (locateIsVarGE s so v)
 
 --------------------------------------------------------------------------------
 -- Var
@@ -68,6 +105,22 @@ export
   interpolate (V pos _ p) = "\{getName sc pos @{p}} (\{show pos})"
 
 export
+locateVar :
+     SizeOf local
+  -> Var (outer++local)
+  -> Either (Var local) (Var outer)
+locateVar s (V pos name prf) =
+  case locateIsVar s prf of
+    Left0  q => Left (V _ name q)
+    Right0 q => Right (V _ name q)
+
+export
+Embeddable Var where
+  embed (V p n prf) = V p n (embedIsVar prf)
+
+export
 Shiftable Var where
-  genShift sol son (V pos nm prf) =
-    V (pos + son.size + sol.size) nm (shiftVar sol.hasLength son.hasLength prf)
+  genShift sol son v =
+    case locateVar sol v of
+      Left  v2 => embed v2
+      Right v2 => ?fooo2
