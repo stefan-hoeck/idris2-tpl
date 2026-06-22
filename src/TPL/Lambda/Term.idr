@@ -66,6 +66,12 @@ export %inline
 closed : Term -> Maybe (STerm [<])
 closed = scoped
 
+export
+restore : {sc : Scope} -> STerm sc -> Term
+restore (SVar $ V n _ p) = TVar (getName sc n @{p})
+restore (SLam x y)       = TLam x (restore y)
+restore (SApp t s)       = TApp (restore t) (restore s)
+
 --------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------
