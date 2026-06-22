@@ -23,6 +23,7 @@ modules    = TPL.BoolExp.Parser
 
            , TPL.Parser.Util
 
+           , TPL.Lambda.Examples
            , TPL.Lambda.Parser
            , TPL.Lambda.Term
 
