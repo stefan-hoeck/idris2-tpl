@@ -1,7 +1,7 @@
 module TPL.Name.Var
 
 import Data.DPair
-import Data.List.HasLength
+import Data.SnocList.HasLength
 import Decidable.HDecEq
 import public TPL.Name
 import public TPL.Name.LSizeOf
@@ -36,7 +36,12 @@ mkIsVar (sx :< x) nm =
     Nothing0  => (\(Element n iv) => Element (S n) (IS iv)) <$> mkIsVar sx nm
 
 export
-0 weakenIsVarFish : HasLength m ns -> IsVar n nm sc -> IsVar (n+m) nm (sc<><ns)
+0 shiftVar :
+     {0 outer, ns, local : Scope}
+  -> HasLength sl local
+  -> HasLength sn ns
+  -> IsVar n nm (outer++local)
+  -> IsVar (n+sn+sl) nm ((outer++ns)++local)
 
 --------------------------------------------------------------------------------
 -- Var
@@ -63,9 +68,6 @@ export
   interpolate (V pos _ p) = "\{getName sc pos @{p}} (\{show pos})"
 
 export
-weakenFish : LSizeOf ns -> Var sc -> Var (sc <>< ns)
-weakenFish so (V p n q) = V (p+so.size) n (weakenIsVarFish so.hasLength q)
-
-export %inline
-weaken : Var sc -> Var (sc:<n)
-weaken = weakenFish (suc zero)
+Shiftable Var where
+  genShift sol son (V pos nm prf) =
+    V (pos + son.size + sol.size) nm (shiftVar sol.hasLength son.hasLength prf)

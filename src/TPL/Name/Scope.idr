@@ -13,6 +13,14 @@ public export
 0 Scoped : Type
 Scoped = Scope -> Type
 
+--------------------------------------------------------------------------------
+-- Shifting
+--------------------------------------------------------------------------------
+
+-- Node: "Shifting" is called "Weakening" in the Idris compiler, but we are
+--       sticking to the terminology from "Types and Programming Languages"
+--       here.
+
 public export
 0 GenShift : Scoped -> Type
 GenShift tm = {0 outer, ns, local : Scope} ->
