@@ -72,6 +72,17 @@ restore (SVar $ V n _ p) = TVar (getName sc n @{p})
 restore (SLam x y)       = TLam x (restore y)
 restore (SApp t s)       = TApp (restore t) (restore s)
 
+weakenFishT : LSizeOf ns -> STerm sc -> STerm (sc<><ns)
+weakenFishT x (SVar v)   = SVar (weakenFish x v)
+weakenFishT x (SApp t s) = SApp (weakenFishT x t) (weakenFishT x s)
+weakenFishT x (SLam y z) = SLam y ?foooo
+
+export
+subst : {sc : _} -> Var sc -> STerm sc -> STerm sc -> STerm sc
+subst v s (SVar x)   = if v == x then s else SVar x
+subst v s (SApp t x) = SApp (subst v s t) (subst v s x)
+subst v s (SLam x y) = SLam x $ subst (weaken v) (weakenFishT (suc zero) s) y
+
 --------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------
