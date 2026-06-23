@@ -15,6 +15,7 @@ modules    = TPL.BoolExp.Parser
            , TPL.ArExp.Term
            , TPL.ArExp.TT
 
+           , TPL.Env
            , TPL.Name
            , TPL.Name.LSizeOf
            , TPL.Name.Scope

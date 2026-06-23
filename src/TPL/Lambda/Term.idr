@@ -1,5 +1,6 @@
 module TPL.Lambda.Term
 
+import TPL.Env
 import TPL.Name.Var
 import Derive.Prelude
 
@@ -56,6 +57,10 @@ data STerm : (sc : Scope) -> Type where
   SApp : (t,s : STerm sc) -> STerm sc
   SLam : (x : VarName) -> STerm (sc:<x) -> STerm sc
 
+public export
+0 ClosedTerm : Type
+ClosedTerm = STerm [<]
+
 shiftImpl : GenShift STerm
 shiftImpl sol son (SVar x)   = SVar (genShift sol son x)
 shiftImpl sol son (SApp t s) = SApp (shiftImpl sol son t) (shiftImpl sol son s)
@@ -72,15 +77,30 @@ strImpl s t (SLam x y) = SLam x <$> strImpl s (suc t) y
 export %inline
 Strengthenable STerm where genStrengthen = strImpl
 
-export
-scoped : {sc : _} -> Term -> Maybe (STerm sc)
-scoped (TVar v)   = SVar <$> mkVar sc v
-scoped (TApp t s) = [| SApp (scoped t) (scoped s) |]
-scoped (TLam v x) = SLam v <$> scoped x
+embedImpl : Embed STerm
+embedImpl (SVar x)   = SVar (embed x)
+embedImpl (SApp t s) = SApp (embedImpl t) (embedImpl s)
+embedImpl (SLam x y) = SLam x (embedImpl y)
 
 export %inline
-closed : Term -> Maybe (STerm [<])
-closed = scoped
+Embeddable STerm where embed = embedImpl
+
+parameters (env : Env ClosedTerm)
+
+  export
+  scoped : {sc : _} -> Term -> Either String (STerm sc)
+  scoped (TVar v)   =
+    case mkVar sc v of
+      Just vr => Right (SVar vr)
+      Nothing => case lookup v env of
+        Just ct => Right $ embed ct
+        Nothing => Left "unknown variable: \{v}"
+  scoped (TApp t s) = [| SApp (scoped t) (scoped s) |]
+  scoped (TLam v x) = SLam v <$> scoped x
+
+  export %inline
+  closed : Term -> Either String (STerm [<])
+  closed = scoped
 
 export
 restore : {sc : Scope} -> STerm sc -> Term
