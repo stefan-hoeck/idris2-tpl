@@ -120,25 +120,6 @@ public export
 term : P1 q (BBErr Void) Term
 term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
-example : String
-example =
-  """
-  """
-
-export
-testParse : String -> IO ()
-testParse =
-  putStrLn . either interpolate interpolate . parseString term Virtual
-
-export
-testScoped : String -> IO ()
-testScoped s =
-  case parseString term Virtual s of
-    Left x  => putStrLn "\{x}"
-    Right t => case closed t of
-      Nothing => putStrLn "variable not in scope"
-      Just st => putStrLn "\{st}"
-
 --------------------------------------------------------------------------------
 -- Proofs
 --------------------------------------------------------------------------------
