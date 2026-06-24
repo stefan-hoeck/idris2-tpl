@@ -8,7 +8,7 @@ import Text.ILex
 %default total
 
 values : Gen Term
-values = element [TTrue, TFalse, TZ]
+values = element [TTrue NoBB, TFalse NoBB, TZ NoBB]
 
 terms : Gen Term
 terms = go 5
@@ -18,17 +18,17 @@ terms = go 5
     go (S k) =
       frequency
         [ (1, values)
-        , (2, TSucc <$> go k)
-        , (2, TPred <$> go k)
-        , (2, TIsZ <$> go k)
-        , (2, [| TIf (go k) (go k) (go k) |])
+        , (2, TSucc NoBB <$> go k)
+        , (2, TPred NoBB <$> go k)
+        , (2, TIsZ NoBB <$> go k)
+        , (2, [| TIf (pure NoBB) (go k) (go k) (go k) |])
         ]
 
 prop_roundtrip : Property
 prop_roundtrip =
   property $ Prelude.do
     t <- forAll terms
-    Right t === parseString term Virtual "\{t}"
+    Right t === map emptyBounds (parseString term Virtual "\{t}")
 
 export
 props : Group

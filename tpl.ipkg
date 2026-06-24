@@ -11,6 +11,7 @@ brief      = "Working through Types and Programming Languages"
 modules    = TPL.BoolExp.Parser
            , TPL.BoolExp.Term
 
+           , TPL.ArExp.Example
            , TPL.ArExp.Parser
            , TPL.ArExp.Term
            , TPL.ArExp.TT

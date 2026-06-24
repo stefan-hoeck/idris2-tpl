@@ -1,9 +1,10 @@
 module TPL.ArExp.Parser
 
 import Derive.Prelude
-import TPL.Parser.Util
+import Syntax.T1
 import public TPL.ArExp.TT
 import public TPL.ArExp.Term
+import public TPL.Parser.Util
 
 %default total
 %hide Data.Linear.(.)
@@ -16,15 +17,15 @@ import public TPL.ArExp.Term
 data PState : SnocList Type -> Type where
   PIni   : PState [<]
   POpn   : PState [<]
-  PIsZ   : PState [<]
-  PSucc  : PState [<]
-  PIf    : PState [<]
-  PPred  : PState [<]
+  PIsZ   : PState [<ByteBounds]
+  PSucc  : PState [<ByteBounds]
+  PIf    : PState [<ByteBounds]
+  PPred  : PState [<ByteBounds]
   PCls   : PState [<Term]
-  PIfV   : PState [<Term]
-  PThen  : PState [<Term]
-  PThenV : PState [<Term,Term]
-  PElse  : PState [<Term,Term]
+  PIfV   : PState [<ByteBounds,Term]
+  PThen  : PState [<ByteBounds,Term]
+  PThenV : PState [<ByteBounds,Term,Term]
+  PElse  : PState [<ByteBounds,Term,Term]
   PTerm  : PState [<Term]
   PErr   : PState [<]
 
@@ -41,23 +42,25 @@ Cast (PState ts) (Index PSz) where
 
 public export
 0 SK : Type -> Type
-SK = DStack PState Void
+SK = DStack PState TpeErr
 
 parameters {auto sk : SK q}
   onTerm : Term -> StateAct q PState PSz
-  onTerm trm POpn   sx              t = dput PCls (sx:<trm) t
-  onTerm trm PIni   sx              t = dput PTerm [<trm] t
-  onTerm trm PIf    sx              t = dput PIfV (sx:<trm) t
-  onTerm trm PThen  sx              t = dput PThenV (sx:<trm) t
-  onTerm trm PSucc  (sx:>pst)       t = onTerm (TSucc trm) pst sx t
-  onTerm trm PPred  (sx:>pst)       t = onTerm (TPred trm) pst sx t
-  onTerm trm PIsZ   (sx:>pst)       t = onTerm (TIsZ trm) pst sx t
-  onTerm trm PElse  [<x,y]          t = dput PTerm [<TIf x y trm] t
-  onTerm trm PElse  (sx:>pst:<x:<y) t = onTerm (TIf x y trm) pst sx t
-  onTerm trm st     sx              t = derr PErr sx st t
-
-  onInt : Integer -> F1 q (Index PSz)
-  onInt = dact . onTerm . int
+  onTerm trm POpn   sx                  t = dput PCls (sx:<trm) t
+  onTerm trm PIni   sx                  t = dput PTerm [<trm] t
+  onTerm trm PIf    sx                  t = dput PIfV (sx:<trm) t
+  onTerm trm PThen  sx                  t = dput PThenV (sx:<trm) t
+  onTerm trm PSucc  (sx:>pst:<bb)       t =
+    onTerm (TSucc (bb <+> cast trm) trm) pst sx t
+  onTerm trm PPred  (sx:>pst:<bb)       t =
+    onTerm (TPred (bb <+> cast trm) trm) pst sx t
+  onTerm trm PIsZ   (sx:>pst:<bb)       t =
+    onTerm (TIsZ (bb <+> cast trm) trm) pst sx t
+  onTerm trm PElse  [<bb,x,y]           t =
+    dput PTerm [<TIf (bb <+> cast trm) x y trm] t
+  onTerm trm PElse  (sx:>pst:<bb:<x:<y) t =
+    onTerm (TIf (bb <+> cast trm) x y trm) pst sx t
+  onTerm trm st     sx                  t = derr PErr sx st t
 
   onThen : StateAct q PState PSz
   onThen PIfV sx t = dput PThen sx t
@@ -74,8 +77,8 @@ parameters {auto sk : SK q}
 atomSteps : Steps q PSz SK
 atomSteps =
      opn '(' (dpush0 POpn)
-  :: bools (dact . onTerm . cast)
-  ++ nats onInt
+  :: bools (\b => bounded' b >>= dact . onTerm . bool)
+  ++ nats  (\b => bounded' b >>= dact . onTerm . int)
 
 atom : DFA q PSz SK
 atom = spaced atomSteps
@@ -83,10 +86,10 @@ atom = spaced atomSteps
 value : DFA q PSz SK
 value =
   spaced $
-    [ step (like "if")     (dpush0 PIf)
-    , step (like "succ")   (dpush0 PSucc)
-    , step (like "pred")   (dpush0 PPred)
-    , step (like "iszero") (dpush0 PIsZ)
+    [ step (like "if")     (bounds >>= dpush PIf)
+    , step (like "succ")   (bounds >>= dpush PSucc)
+    , step (like "pred")   (bounds >>= dpush PPred)
+    , step (like "iszero") (bounds >>= dpush PIsZ)
     ] ++ atomSteps
 
 ptrans : Lex1 q PSz SK
@@ -111,7 +114,7 @@ atms = ["true", "false", "0", "("]
 values : List String
 values = ["if", "succ", "pred", "iszero"] ++ atms
 
-perr : Arr32 PSz (SK q -> F1 q (BBErr Void))
+perr : Arr32 PSz (SK q -> F1 q ArErr)
 perr =
   arr32 PSz (unexpected values)
     [ entry PIfV   $ unexpected ["then"]
@@ -122,7 +125,7 @@ perr =
     , entry PIsZ   $ unexpected atms
     ]
 
-peoi : Index PSz -> SK q -> F1 q (Either (BBErr Void) Term)
+peoi : Index PSz -> SK q -> F1 q (Either ArErr Term)
 peoi st sk t =
  let ([<x]:>PTerm) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
   in Right x # t
@@ -151,31 +154,8 @@ peoi st sk t =
 |||   ws          = *wschar
 |||   wschar      = %x0a / %x0d / %x09 / %x20
 public export
-term : P1 q (BBErr Void) Term
+term : P1 q ArErr Term
 term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
-
-example : String
-example =
-  """
-  if (iszero (succ 0xf))
-     then 100
-     else (pred 0b10011)
-  """
-
-export
-testParse : String -> IO ()
-testParse =
-  putStrLn . either interpolate interpolate . parseString term Virtual
-
-export
-testEval : String -> IO ()
-testEval s =
-  case parseString term Virtual s of
-    Left err => putStrLn "\{err}"
-    Right t  => case typeCheck t of
-      Left msg           => putStrLn msg
-      Right (TNat ** t)  => printLn (eval t)
-      Right (TBool ** t) => printLn (eval t)
 
 --------------------------------------------------------------------------------
 -- Proofs
