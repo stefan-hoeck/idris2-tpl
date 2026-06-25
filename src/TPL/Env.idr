@@ -27,8 +27,8 @@ toPair : Functor f => (a -> f b) -> Entry a -> f (VarName, b)
 toPair g (name ::= val) = (name,) <$> g val
 
 export
-mkEnv : (Env b -> a -> Either e b) -> Entries a -> Either e (Env b)
-mkEnv fun = go empty
+mkEnv : Env b -> (Env b -> a -> Either e b) -> Entries a -> Either e (Env b)
+mkEnv ini fun = go ini
   where
     go : Env b -> Entries a -> Either e (Env b)
     go gamma []        = Right gamma
