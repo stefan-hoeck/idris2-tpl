@@ -42,6 +42,7 @@ public export
 SK = DStack PState TpeErr
 
 parameters {auto sk : SK q}
+
   onTerm : Term -> StateAct q PState PSz
   onTerm s PApp  sx       t = dput PAppT (sx:<s:<[<]) t
   onTerm s PAppT (sx:<ss) t = dput PAppT (sx:<(ss:<s)) t
@@ -49,6 +50,8 @@ parameters {auto sk : SK q}
 
   onCloseT : Term -> StateAct q PState PSz
   onCloseT trm POpn  (sx:>st)          t = onTerm trm st sx t
+  onCloseT trm PApp  (sx:>st)          t = onCloseT trm st sx t
+  onCloseT trm PAppT (sx:>st:<s:<ss)   t = onCloseT (appAllSnoc s ss) st sx t
   onCloseT trm PLamV (sx:>st:<b:<v)    t = onCloseT (TLam b v trm) st sx t
   onCloseT trm PElse (sx:>st:<b:<x:<y) t = onCloseT (TIf b x y trm) st sx t
   onCloseT trm st    sx                t = derr PErr sx st t

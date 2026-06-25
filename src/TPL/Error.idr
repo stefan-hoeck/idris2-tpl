@@ -16,5 +16,5 @@ data TplErr : Type -> Type where
 export
 Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrUnify e f) =
-    "type mismatch; can't unify \{e} (expected) with \{f} (found)"
-  interpolate (ErrBind v) = "unknown variable: '\{v}'"
+    "Type mismatch: can't unify \{e} (expected) with \{f} (found)"
+  interpolate (ErrBind v) = "Unknown variable: '\{v}'"
