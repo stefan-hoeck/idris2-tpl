@@ -1,27 +1,66 @@
 module TPL.Lambda.Term
 
+import Derive.Prelude
 import TPL.Env
 import TPL.Name.Var
-import Derive.Prelude
+import Text.ByteBounds
 
 %default total
 %language ElabReflection
 
 public export
+data Prim : Type where
+  PNat  : Nat -> Prim
+  PBool : Bool -> Prim
+
+%runElab derive "Prim" [Show,Eq]
+
+export
+Interpolation Prim where
+  interpolate (PNat v)  = show v
+  interpolate (PBool v) = show v
+
+public export
 data Term : Type where
-  TVar : (v : VarName) -> Term -- a plain variable
-  TLam : (v : VarName) -> (sc : Term) -> Term -- variable and its scope
-  TApp : (t,s : Term) -> Term -- function application
+  TVar   : ByteBounds -> (v : VarName) -> Term -- a plain variable
+  TLam   : ByteBounds -> (v : VarName) -> (sc : Term) -> Term -- variable and its scope
+  TApp   : ByteBounds -> (t,s : Term) -> Term -- function application
+  TPrim  : ByteBounds -> Prim -> Term -- primiive values
+  TIf    : ByteBounds -> (i,t,e : Term) -> Term -- if then else
 
 %runElab derive "Term" [Show,Eq]
 
 public export %inline
-FromString Term where fromString = TVar . fromString
+FromString Term where fromString = TVar NoBB . fromString
+
+--------------------------------------------------------------------------------
+-- Utilities
+--------------------------------------------------------------------------------
+
+export
+Cast Term ByteBounds where
+  cast (TVar x _)    = x
+  cast (TLam x _ _)  = x
+  cast (TApp x _ _)  = x
+  cast (TPrim x _)   = x
+  cast (TIf x _ _ _) = x
+
+export
+nat : ByteBounds -> Nat -> Term
+nat bb n = TPrim bb (PNat n)
+
+export %inline
+int : ByteBounded Integer -> Term
+int (B i bb) = nat bb $ cast i
+
+export %inline
+bool : ByteBounded Bool -> Term
+bool (B b bb) = TPrim bb (PBool b)
 
 export
 appAll : Term -> List Term -> Term
 appAll s []      = s
-appAll s (t::ts) = appAll (TApp s t) ts
+appAll s (t::ts) = appAll (TApp (cast s <+> cast t) s t) ts
 
 export %inline
 appAllSnoc : Term -> SnocList Term -> Term
@@ -31,18 +70,26 @@ appAllSnoc s = appAll s . (<>>[])
 -- Pretty Printing
 --------------------------------------------------------------------------------
 
-appL, appR : Term -> String
+isAtom : Term -> Bool
+isAtom (TVar {})  = True
+isAtom (TPrim {}) = True
+isAtom _          = False
+
+appL : Term -> String
+
+paren : Term -> String
 
 pretty : Term -> String
-pretty (TVar v)    = v.name
-pretty (TLam v sc) = "λ\{v}. \{pretty sc}"
-pretty (TApp t s)  = "\{appL t} \{appR s}"
+pretty (TVar _ v)    = v.name
+pretty (TLam _ v sc) = "λ\{v}. \{pretty sc}"
+pretty (TApp _ t s)  = "\{appL t} \{paren s}"
+pretty (TPrim _ p)   = interpolate p
+pretty (TIf _ i t e) = "if \{pretty i} then \{pretty t} else \{pretty e}"
 
-appL l@(TLam {}) = "(\{pretty l})"
-appL t           = pretty t
+paren t = if isAtom t then pretty t else "(\{pretty t})"
 
-appR (TVar v) = v.name
-appR t        = "(\{pretty t})"
+appL (TApp _ t s) = "\{appL t} \{paren s}"
+appL t            = paren t
 
 export %inline
 Interpolation Term where interpolate = pretty
@@ -53,34 +100,54 @@ Interpolation Term where interpolate = pretty
 
 public export
 data STerm : (sc : Scope) -> Type where
-  SVar : Var sc -> STerm sc
-  SApp : (t,s : STerm sc) -> STerm sc
-  SLam : (x : VarName) -> STerm (sc:<x) -> STerm sc
+  SVar   : ByteBounds -> (v : Var sc) -> STerm sc
+  SLam   : ByteBounds -> (v : VarName) -> STerm (sc:<v) -> STerm sc
+  SApp   : ByteBounds -> (t,s : STerm sc) -> STerm sc
+  SPrim  : ByteBounds -> Prim -> STerm sc
+  SIf    : ByteBounds -> (i,t,e : STerm sc) -> STerm sc
+  SSucc  : ByteBounds -> STerm sc -> STerm sc
+  SPred  : ByteBounds -> STerm sc -> STerm sc
+  SIsZ   : ByteBounds -> STerm sc -> STerm sc
 
 public export
 0 ClosedTerm : Type
 ClosedTerm = STerm [<]
 
 shiftImpl : GenShift STerm
-shiftImpl sol son (SVar x)   = SVar (genShift sol son x)
-shiftImpl sol son (SApp t s) = SApp (shiftImpl sol son t) (shiftImpl sol son s)
-shiftImpl sol son (SLam x y) = SLam x (shiftImpl (suc sol) son y)
+shiftImpl sol son (SVar b x)    = SVar b (genShift sol son x)
+shiftImpl sol son (SApp b t s)  = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
+shiftImpl sol son (SLam b x y)  = SLam b x (shiftImpl (suc sol) son y)
+shiftImpl sol son (SPrim b p)   = SPrim b p
+shiftImpl sol son (SIf b i t e) = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
+shiftImpl sol son (SSucc b x)   = SSucc b (shiftImpl sol son x)
+shiftImpl sol son (SPred b x)   = SPred b (shiftImpl sol son x)
+shiftImpl sol son (SIsZ b x)    = SIsZ b (shiftImpl sol son x)
 
 export %inline
 Shiftable STerm where genShift = shiftImpl
 
 strImpl : GenStrengthen STerm
-strImpl s t (SVar x)   = SVar <$> genStrengthen s t x
-strImpl s t (SApp x y) = [| SApp (strImpl s t x) (strImpl s t y) |]
-strImpl s t (SLam x y) = SLam x <$> strImpl s (suc t) y
+strImpl s t (SVar b x)    = SVar b <$> genStrengthen s t x
+strImpl s t (SApp b x y)  = [| SApp (pure b) (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SLam b x y)  = SLam b x <$> strImpl s (suc t) y
+strImpl s t (SPrim b p)   = Just $ SPrim b p
+strImpl s t (SIf b i x y) = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SSucc b x)   = SSucc b <$> strImpl s t x
+strImpl s t (SPred b x)   = SPred b <$> strImpl s t x
+strImpl s t (SIsZ b x)    = SIsZ b <$> strImpl s t x
 
 export %inline
 Strengthenable STerm where genStrengthen = strImpl
 
 embedImpl : Embed STerm
-embedImpl (SVar x)   = SVar (embed x)
-embedImpl (SApp t s) = SApp (embedImpl t) (embedImpl s)
-embedImpl (SLam x y) = SLam x (embedImpl y)
+embedImpl (SVar b x)      = SVar b (embed x)
+embedImpl (SApp b t s)    = SApp b (embedImpl t) (embedImpl s)
+embedImpl (SLam b x y)    = SLam b x (embedImpl y)
+embedImpl (SPrim b p)     = SPrim b p
+embedImpl (SIf b i x y)   = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
+embedImpl (SSucc b x)     = SSucc b $ embedImpl x
+embedImpl (SPred b x)     = SPred b $ embedImpl x
+embedImpl (SIsZ b x)      = SIsZ b $ embedImpl x
 
 export %inline
 Embeddable STerm where embed = embedImpl
@@ -89,14 +156,16 @@ parameters (env : Env ClosedTerm)
 
   export
   scoped : {sc : _} -> Term -> Either String (STerm sc)
-  scoped (TVar v)   =
+  scoped (TVar b v)   =
     case mkVar sc v of
-      Just vr => Right (SVar vr)
+      Just vr => Right (SVar b vr)
       Nothing => case lookup v env of
         Just ct => Right $ embed ct
         Nothing => Left "unknown variable: \{v}"
-  scoped (TApp t s) = [| SApp (scoped t) (scoped s) |]
-  scoped (TLam v x) = SLam v <$> scoped x
+  scoped (TApp b t s)  = [| SApp (pure b) (scoped t) (scoped s) |]
+  scoped (TLam b v x)  = SLam b v <$> scoped x
+  scoped (TPrim b p)   = Right $ SPrim b p
+  scoped (TIf b i x y) = [|SIf (pure b) (scoped i) (scoped x) (scoped y) |]
 
   export %inline
   closed : Term -> Either String (STerm [<])
@@ -104,29 +173,56 @@ parameters (env : Env ClosedTerm)
 
 export
 restore : {sc : Scope} -> STerm sc -> Term
-restore (SVar $ V n _ p) = TVar (getName sc n @{p})
-restore (SApp t s)       = TApp (restore t) (restore s)
-restore (SLam x y)       = TLam x (restore y)
+restore (SVar b $ V n _ p) = TVar b (getName sc n @{p})
+restore (SApp b t s)       = TApp b (restore t) (restore s)
+restore (SLam b x y)       = TLam b x (restore y)
+restore (SPrim b p)        = TPrim b p
+restore (SIf b i x y)      = TIf b (restore i) (restore x) (restore y)
+restore (SSucc b x)        = TApp b "succ" (restore x)
+restore (SPred b x)        = TApp b "pred" (restore x)
+restore (SIsZ b x)         = TApp b "iszero" (restore x)
 
 export
 subst : {sc : _} -> Var sc -> STerm sc -> STerm sc -> STerm sc
-subst v s (SVar x)   = if v == x then s else SVar x
-subst v s (SApp t x) = SApp (subst v s t) (subst v s x)
-subst v s (SLam x y) = SLam x $ subst (shift v) (shift s) y
+subst v s (SVar b x)    = if v == x then s else SVar b x
+subst v s (SApp b t x)  = SApp b (subst v s t) (subst v s x)
+subst v s (SLam b x y)  = SLam b x $ subst (shift v) (shift s) y
+subst v s (SPrim b p)   = SPrim b p
+subst v s (SIf b i x y) = SIf b (subst v s i) (subst v s x) (subst v s y)
+subst v s (SSucc b x)   = SSucc b $ subst v s x
+subst v s (SPred b x)   = SPred b $ subst v s x
+subst v s (SIsZ b x)    = SIsZ b $ subst v s x
 
 --------------------------------------------------------------------------------
 -- Evaluation
 --------------------------------------------------------------------------------
 
+isVal : STerm sc -> Bool
+isVal (SPrim {}) = True
+isVal (SLam {})  = True
+isVal t          = False
+
 export
 step : {sc : _} -> STerm sc -> Maybe (STerm sc)
-step (SApp (SLam x t) s@(SLam {})) =
-  strengthen (suc zero) $ subst zero (shift s) t
-step (SApp t s) =
-  case step t of
-    Just t2 => Just (SApp t2 s)
-    Nothing => SApp t <$> step s
-step _ = Nothing
+step trm =
+  case trm of
+    SApp b (SLam bl x s) t =>
+      case isVal t of
+        True  => strengthen (suc zero) $ subst zero (shift t) s
+        False => SApp b (SLam bl x s) <$> step t
+    SApp b t s =>
+      case step t of
+        Just t2 => Just (SApp b t2 s)
+        Nothing => SApp b t <$> step s
+    SSucc b (SPrim _ $ PNat n) => Just (SPrim b (PNat $ S n))
+    SPred b (SPrim _ $ PNat n) => Just (SPrim b (PNat $ pred n))
+    SIsZ b  (SPrim _ $ PNat n) => Just (SPrim b $ PBool $ isZero n)
+    SPred b t => SPred b <$> step t
+    SSucc b t => SSucc b <$> step t
+    SIsZ b t  => SIsZ b <$> step t
+    SIf b (SPrim _ $ PBool v) y z => Just $ if v then y else z
+    SIf b x y z => (\x2 => SIf b x2 y z) <$> step x
+    _ => Nothing
 
 export covering
 eval : {sc : _} -> STerm sc -> STerm sc
@@ -135,22 +231,5 @@ eval t =
     Nothing => t
     Just t2 => eval t2
 
---------------------------------------------------------------------------------
--- Pretty Printing
---------------------------------------------------------------------------------
-
-sappL, sappR : {sc : _} -> STerm sc -> String
-
-spretty : {sc : _} -> STerm sc -> String
-spretty (SVar v)    = interpolate v
-spretty (SApp t s)  = "\{sappL t} \{sappR s}"
-spretty (SLam v sc) = "λ\{v}. \{spretty sc}"
-
-sappL l@(SLam {}) = "(\{spretty l})"
-sappL t           = spretty t
-
-sappR (SVar v) = interpolate v
-sappR t        = "(\{spretty t})"
-
 export %inline
-{sc : _} -> Interpolation (STerm sc) where interpolate = spretty
+{sc : _} -> Interpolation (STerm sc) where interpolate t = "\{restore t}"

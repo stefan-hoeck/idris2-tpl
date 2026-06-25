@@ -1,12 +1,14 @@
 module TPL.Lambda.Parser
 
 import Derive.Prelude
+import Syntax.T1
 import TPL.Parser.Util
 import public TPL.Lambda.Term
 
 %default total
 %hide Data.Linear.(.)
 %hide Language.Reflection.Types.PLam
+%hide Language.Reflection.Types.PApp
 %language ElabReflection
 
 --------------------------------------------------------------------------------
@@ -14,14 +16,14 @@ import public TPL.Lambda.Term
 --------------------------------------------------------------------------------
 
 data PState : SnocList Type -> Type where
-  PIni   : PState [<]
-  PIniT  : PState [<Term,SnocList Term]
+  PApp   : PState [<]
+  PAppT  : PState [<Term,SnocList Term]
   POpn   : PState [<]
-  POpnT  : PState [<Term,SnocList Term]
-  PLam   : PState [<]
-  PLamV  : PState [<VarName]
-  PLamD  : PState [<Void]
-  PLamT  : PState [<VarName,Term,SnocList Term]
+  PLam   : PState [<ByteBounds]
+  PLamV  : PState [<ByteBounds,VarName]
+  PIf    : PState [<ByteBounds]
+  PThen  : PState [<ByteBounds,Term]
+  PElse  : PState [<ByteBounds,Term,Term]
   PErr   : PState [<]
 
 %runElab deriveIndexed "PState" [Show,ConIndex]
@@ -41,38 +43,53 @@ SK = DStack PState Void
 
 parameters {auto sk : SK q}
   onTerm : Term -> StateAct q PState PSz
-  onTerm s PIni [<]       t = dput PIniT [<s,[<]] t
-  onTerm s PIniT (sx:<ss) t = dput PIniT (sx:<(ss:<s)) t
-  onTerm s POpn sx        t = dput POpnT (sx:<s:<[<]) t
-  onTerm s POpnT (sx:<ss) t = dput POpnT (sx:<(ss:<s)) t
-  onTerm s PLamV sx       t = dput PLamT (sx:<s:<[<]) t
-  onTerm s PLamT (sx:<ss) t = dput PLamT (sx:<(ss:<s)) t
+  onTerm s PApp  sx       t = dput PAppT (sx:<s:<[<]) t
+  onTerm s PAppT (sx:<ss) t = dput PAppT (sx:<(ss:<s)) t
   onTerm s st sx          t = derr PErr sx st t
 
-  onVar : VarName -> StateAct q PState PSz
-  onVar v PLam sx t = dput PLamV (sx:<v) t
-  onVar v st   sx t = onTerm (TVar v) st sx t
-
   onCloseT : Term -> StateAct q PState PSz
-  onCloseT trm POpn (sx:>st)     t = onTerm trm st sx t
-  onCloseT trm PLamV (sx:>st:<v) t = onCloseT (TLam v trm) st sx t
-  onCloseT trm POpnT (sx:>st:<s:<ss) t =
-    onTerm (appAllSnoc s $ ss:<trm) st sx t
-  onCloseT trm PLamT (sx:>st:<v:<s:<ss) t =
-    onCloseT (TLam v $ appAllSnoc s $ ss :< trm) st sx t
-  onCloseT trm st    sx                 t = derr PErr sx st t
+  onCloseT trm POpn  (sx:>st)          t = onTerm trm st sx t
+  onCloseT trm PLamV (sx:>st:<b:<v)    t = onCloseT (TLam b v trm) st sx t
+  onCloseT trm PElse (sx:>st:<b:<x:<y) t = onCloseT (TIf b x y trm) st sx t
+  onCloseT trm st    sx                t = derr PErr sx st t
 
   onClose : StateAct q PState PSz
-  onClose POpnT (sx:>st:<s:<ss)    t = onTerm (appAllSnoc s ss) st sx t
-  onClose PLamT (sx:>st:<v:<s:<ss) t =
-    onCloseT (TLam v $ appAllSnoc s ss) st sx t
+  onClose PAppT (sx:>st:<s:<ss)    t = onCloseT (appAllSnoc s ss) st sx t
   onClose st    sx                 t = derr PErr sx st t
 
+  onIf : ByteBounds -> StateAct q PState PSz
+  onIf b PApp  sx t = dput PApp (sx:>PApp:<b:>PIf) t
+  onIf b PLamV sx t = dput PApp (sx:>PLamV:<b:>PIf) t
+  onIf b POpn  sx t = dput PApp (sx:>POpn:<b:>PIf) t
+  onIf b st    sx t = derr PErr sx st t
+
+  onThen : StateAct q PState PSz
+  onThen PAppT (sx:>PIf:<s:<ss) t = dput PApp (sx:<appAllSnoc s ss:>PThen) t
+  onThen st    sx               t = derr PErr sx st t
+
+  onElse : StateAct q PState PSz
+  onElse PAppT (sx:>PThen:<s:<ss) t = dput PApp (sx:<appAllSnoc s ss:>PElse) t
+  onElse st    sx                 t = derr PErr sx st t
+
+  onVar : ByteBounded VarName -> StateAct q PState PSz
+  onVar v st sx t =
+    case v.val.name of
+      "if"   => onIf v.bounds st sx t
+      "then" => onThen st sx t
+      "else" => onElse st sx t
+      _      => case st of
+        PLam => dput PLamV (sx:<v.val) t
+        _    => onTerm (TVar v.bounds v.val) st sx t
+
 atoms : Steps q PSz SK
-atoms = opn '(' (dpush0 POpn) :: (varName $ dact . onVar)
+atoms =
+     opn '(' (getStack >>= \st => dput PApp (st:>POpn))
+  :: bools (\b => bounded' b >>= dact . onTerm . bool)
+  ++ nats  (\b => bounded' b >>= dact . onTerm . int)
+  ++ varName (\b => bounded' b >>= dact . onVar)
 
 terms : DFA q PSz SK
-terms = spaced $ step ('\\' <|> 'λ') (dpush0 PLam) :: atoms
+terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dpush PLam) :: atoms
 
 atomOrClose : DFA q PSz SK
 atomOrClose = spaced $ close ')' (dact onClose) :: atoms
@@ -80,34 +97,30 @@ atomOrClose = spaced $ close ')' (dact onClose) :: atoms
 ptrans : Lex1 q PSz SK
 ptrans =
   lex1
-    [ entry PIni     terms
-    , entry PIniT    atomOrClose
-    , entry POpn     terms
-    , entry POpnT  $ atomOrClose
-    , entry PLam   $ spaced (varName $ dact . onVar)
-    , entry PLamV  $ spaced [step' '.' PLamD]
-    , entry PLamD    terms
-    , entry PLamT  $ atomOrClose
+    [ entry PApp     terms
+    , entry PAppT    atomOrClose
+    , entry PLam   $ spaced (varName $ \b => bounded' b >>= dact . onVar)
+    , entry PLamV  $ spaced [step '.' $ dpush0 PApp]
     ]
 
 perr : Arr32 PSz (SK q -> F1 q (BBErr Void))
 perr =
   arr32 PSz (unexpected [])
-    [ entry POpnT  $ unclosedIfEOI "(" [")"]
-    , entry PLamV  $ unexpected ["."]
+    [ entry POpn  $ unclosedIfEOI "(" [")"]
+    , entry PLamV $ unexpected ["."]
     ]
 
 reduceT : Stack b PState [<] -> Term -> Maybe Term
-reduceT ([<]:>PIni)           t = Just t
-reduceT ([<s,ss]:>PIniT)      t = Just (appAllSnoc s $ ss:<t)
-reduceT (sx:<v:>PLamV)        t = reduceT sx (TLam v t)
-reduceT (sx:<v:<s:<ss:>PLamT) t = reduceT sx (TLam v (appAllSnoc s $ ss:<t))
-reduceT _                     _ = Nothing
+reduceT [<]                  t = Just t
+reduceT (st:>PApp)           t = reduceT st t
+reduceT (st:<s:<ss:>PAppT)   t = reduceT st (appAllSnoc s $ ss:<t)
+reduceT (sx:<b:<v:>PLamV)    t = reduceT sx (TLam b v t)
+reduceT (sx:<b:<x:<y:>PElse) t = reduceT sx (TIf b x y t)
+reduceT _                    _ = Nothing
 
 reduce : Stack b PState [<] -> Maybe Term
-reduce ([<s,ss]:>PIniT)      = Just (appAllSnoc s ss)
-reduce (sx:<v:<s:<ss:>PLamT) = reduceT sx (TLam v $ appAllSnoc s ss)
-reduce _                     = Nothing
+reduce (sx:<s:<ss:>PAppT) = reduceT sx (appAllSnoc s ss)
+reduce _                  = Nothing
 
 peoi : Index PSz -> SK q -> F1 q (Either (BBErr Void) Term)
 peoi st sk t =
@@ -118,18 +131,18 @@ peoi st sk t =
 
 public export
 term : P1 q (BBErr Void) Term
-term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
+term = P (cast PApp) (init $ [<]:>PApp) ptrans (\x => (Nothing #)) perr peoi
 
 --------------------------------------------------------------------------------
 -- Proofs
 --------------------------------------------------------------------------------
 
-inBoundsPState PIni   = Refl
-inBoundsPState PIniT  = Refl
+inBoundsPState PApp   = Refl
+inBoundsPState PAppT  = Refl
 inBoundsPState POpn   = Refl
-inBoundsPState POpnT  = Refl
 inBoundsPState PLam   = Refl
 inBoundsPState PLamV  = Refl
-inBoundsPState PLamD  = Refl
-inBoundsPState PLamT  = Refl
+inBoundsPState PIf    = Refl
+inBoundsPState PThen  = Refl
+inBoundsPState PElse  = Refl
 inBoundsPState PErr   = Refl

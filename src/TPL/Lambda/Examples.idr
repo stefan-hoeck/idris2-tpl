@@ -7,6 +7,14 @@ import public TPL.Name.Var
 
 %default total
 
+predef : Env ClosedTerm
+predef =
+  fromList
+    [ ("succ",   SLam NoBB "x" $ SSucc NoBB $ SVar NoBB zero)
+    , ("pred",   SLam NoBB "x" $ SPred NoBB $ SVar NoBB zero)
+    , ("iszero", SLam NoBB "x" $ SIsZ  NoBB $ SVar NoBB zero)
+    ]
+
 toTerm : Env ClosedTerm -> String -> Either String ClosedTerm
 toTerm env s = Prelude.do
   t <- mapFst interpolate $ parseString term Virtual s
@@ -14,7 +22,7 @@ toTerm env s = Prelude.do
 
 testEnv : Either String (Env ClosedTerm)
 testEnv =
-  mkEnv toTerm
+  mkEnv predef toTerm
     [ "zero" ::= "λs.λz.z"
     , "one"  ::= "λs.λz.s z"
     , "two"  ::= "λs.λz.s (s z)"
@@ -25,6 +33,9 @@ testEnv =
     , "and"  ::= "λx.λy.x y fls"
     , "not"  ::= "λb.λx.λy.b y x"
     , "test" ::= "λb.λx.λy.b x y"
+    , "realbool" ::= "λb.b true false"
+    , "realnat"  ::= "λs.s succ 0"
+    , "churchbool" ::= "λb.if b then tru else fls"
     ]
 
 covering
