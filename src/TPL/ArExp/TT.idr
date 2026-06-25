@@ -4,6 +4,7 @@ import Derive.HDecEq
 import Derive.Prelude
 import TPL.ArExp.Term
 import Text.ByteBounds
+import public TPL.Error
 
 %default total
 %language ElabReflection
@@ -19,19 +20,12 @@ Interpolation Tpe where
   interpolate TBool = "Bool"
 
 public export
-data TpeErr : Type where
-  ErrUnify : (exp, found : Tpe) -> TpeErr
-
-%runElab derive "TpeErr" [Show,Eq]
-
-export
-Interpolation TpeErr where
-  interpolate (ErrUnify e f) =
-    "type mismatch; can't unify \{e} (expected) with \{f} (found)"
+0 TpeErr : Type
+TpeErr = TplErr Tpe
 
 public export
 0 ArErr : Type
-ArErr = BBErr TpeErr
+ArErr = BBErr (TplErr Tpe)
 
 ||| The Idris type corresponding to a `Tpe`
 public export

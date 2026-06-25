@@ -15,31 +15,35 @@ predef =
     , ("iszero", SLam NoBB "x" $ SIsZ  NoBB $ SVar NoBB zero)
     ]
 
-toTerm : Env ClosedTerm -> String -> Either String ClosedTerm
-toTerm env s = Prelude.do
-  t <- mapFst interpolate $ parseString term Virtual s
-  closed env t
+toTerm : Env ClosedTerm -> String -> Either (ParseError TpeErr) ClosedTerm
+toTerm env s =
+  mapFst (toParseError Virtual s) $ Prelude.do
+    t <- runString term s
+    closed env t
 
-testEnv : Either String (Env ClosedTerm)
+testEnv : Either (ParseError TpeErr) (Env ClosedTerm)
 testEnv =
   mkEnv predef toTerm
-    [ "zero" ::= "λs.λz.z"
-    , "one"  ::= "λs.λz.s z"
-    , "two"  ::= "λs.λz.s (s z)"
-    , "scc"  ::= "λn.λs.λz.s (n s z)"
-    , "plus" ::= "λm.λn.λs.λz.m s (n s z)"
-    , "tru"  ::= "λx.λy.x"
-    , "fls"  ::= "λx.λy.y"
-    , "and"  ::= "λx.λy.x y fls"
-    , "not"  ::= "λb.λx.λy.b y x"
-    , "test" ::= "λb.λx.λy.b x y"
-    , "realbool" ::= "λb.b true false"
-    , "realnat"  ::= "λs.s succ 0"
+    [ "zero"       ::= "λs.λz.z"
+    , "one"        ::= "λs.λz.s z"
+    , "two"        ::= "λs.λz.s (s z)"
+    , "scc"        ::= "λn.λs.λz.s (n s z)"
+    , "plus"       ::= "λm.λn.λs.λz.m s (n s z)"
+    , "tru"        ::= "λx.λy.x"
+    , "fls"        ::= "λx.λy.y"
+    , "and"        ::= "λx.λy.x y fls"
+    , "not"        ::= "λb.λx.λy.b y x"
+    , "test"       ::= "λb.λx.λy.b x y"
+    , "realbool"   ::= "λb.b true false"
+    , "realnat"    ::= "λs.s succ 0"
     , "churchbool" ::= "λb.if b then tru else fls"
+    , "fix"        ::= "λf. (λx. f(λy. x x y)) (λx. f (λy. x x y))"
+    , "natg"       ::= "λrec. λn. if iszero n then zero else scc (rec (pred n))"
+    , "churchnat"  ::= "fix natg"
     ]
 
 covering
-run : String -> Either String Term
+run : String -> Either (ParseError TpeErr) Term
 run s = Prelude.do
   env <- testEnv
   ct  <- toTerm env s
