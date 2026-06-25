@@ -39,7 +39,7 @@ Cast (PState ts) (Index PSz) where
 
 public export
 0 SK : Type -> Type
-SK = DStack PState Void
+SK = DStack PState TpeErr
 
 parameters {auto sk : SK q}
   onTerm : Term -> StateAct q PState PSz
@@ -103,7 +103,7 @@ ptrans =
     , entry PLamV  $ spaced [step '.' $ dpush0 PApp]
     ]
 
-perr : Arr32 PSz (SK q -> F1 q (BBErr Void))
+perr : Arr32 PSz (SK q -> F1 q LamErr)
 perr =
   arr32 PSz (unexpected [])
     [ entry POpn  $ unclosedIfEOI "(" [")"]
@@ -122,7 +122,7 @@ reduce : Stack b PState [<] -> Maybe Term
 reduce (sx:<s:<ss:>PAppT) = reduceT sx (appAllSnoc s ss)
 reduce _                  = Nothing
 
-peoi : Index PSz -> SK q -> F1 q (Either (BBErr Void) Term)
+peoi : Index PSz -> SK q -> F1 q (Either LamErr Term)
 peoi st sk t =
  let sx # t := read1 sk.stack_ t
   in case reduce sx of
@@ -130,7 +130,7 @@ peoi st sk t =
        Nothing => arrFail SK perr st sk t
 
 public export
-term : P1 q (BBErr Void) Term
+term : P1 q LamErr Term
 term = P (cast PApp) (init $ [<]:>PApp) ptrans (\x => (Nothing #)) perr peoi
 
 --------------------------------------------------------------------------------

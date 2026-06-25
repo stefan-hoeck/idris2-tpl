@@ -4,6 +4,7 @@ import Derive.Prelude
 import TPL.Env
 import TPL.Name.Var
 import Text.ByteBounds
+import public TPL.Error
 
 %default total
 %language ElabReflection
@@ -14,6 +15,14 @@ data Prim : Type where
   PBool : Bool -> Prim
 
 %runElab derive "Prim" [Show,Eq]
+
+public export
+0 TpeErr : Type
+TpeErr = TplErr Void
+
+public export
+0 LamErr : Type
+LamErr = BBErr TpeErr
 
 export
 Interpolation Prim where
@@ -155,20 +164,20 @@ Embeddable STerm where embed = embedImpl
 parameters (env : Env ClosedTerm)
 
   export
-  scoped : {sc : _} -> Term -> Either String (STerm sc)
+  scoped : {sc : _} -> Term -> Either LamErr (STerm sc)
   scoped (TVar b v)   =
     case mkVar sc v of
       Just vr => Right (SVar b vr)
       Nothing => case lookup v env of
         Just ct => Right $ embed ct
-        Nothing => Left "unknown variable: \{v}"
+        Nothing => Left (B (Custom $ ErrBind v) b)
   scoped (TApp b t s)  = [| SApp (pure b) (scoped t) (scoped s) |]
   scoped (TLam b v x)  = SLam b v <$> scoped x
   scoped (TPrim b p)   = Right $ SPrim b p
   scoped (TIf b i x y) = [|SIf (pure b) (scoped i) (scoped x) (scoped y) |]
 
   export %inline
-  closed : Term -> Either String (STerm [<])
+  closed : Term -> Either LamErr (STerm [<])
   closed = scoped
 
 export
