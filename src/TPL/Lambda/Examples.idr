@@ -63,7 +63,7 @@ testEnv =
     , "natg"       ::= "λrec. λn. if iszero n then zero else scc (rec (pred n))"
     , "churchnat"  ::= "fix natg"
     , "realeq"     ::= "λm. λn. realbool (equal (churchnat m) (churchnat n))"
-    , "factr"      ::= "λfct. λn. if realbool (equal n zero) then one else times2 n (fct (pred n))"
+    , "factr"      ::= "λfct. λn. if realbool (isz n) then one else times n (fct (prd n))"
     , "fact"       ::= "fix factr"
     ]
 
