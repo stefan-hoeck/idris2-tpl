@@ -32,18 +32,39 @@ testEnv =
     , "times"      ::= "λm.λn.m (plus n) zero"
     , "times2"     ::= "λm.λn.λs.λz. m (n s) z"
     , "pow"        ::= "λm.λn.m n"
+
+    -- church bools
     , "tru"        ::= "λx.λy.x"
     , "fls"        ::= "λx.λy.y"
     , "and"        ::= "λx.λy.x y fls"
     , "not"        ::= "λb.λx.λy.b y x"
     , "test"       ::= "λb.λx.λy.b x y"
+
+    -- pairs
+    , "pair"       ::= "λx. λy. λb. b x y"
+    , "fst"        ::= "λp. p tru"
+    , "snd"        ::= "λp. p fls"
+
+    -- combined stuff
     , "isz"        ::= "λn.n (and fls) tru"
-    , "realbool"   ::= "λb.b true false"
-    , "realnat"    ::= "λs.s succ 0"
-    , "churchbool" ::= "λb.if b then tru else fls"
+    , "zz"         ::= "pair zero zero"
+    , "ss"         ::= "λp.pair (snd p) (scc (snd p))"
+    , "prd"        ::= "λn. fst (n ss zz)"
+    , "sub"        ::= "λm. λn. n prd m"
+    , "equal"      ::= "λm. λn. and (isz (sub m n)) (isz (sub n m))"
+
+    -- recursion
     , "fix"        ::= "λf. (λx. f(λy. x x y)) (λx. f (λy. x x y))"
+
+    -- conversions
+    , "realbool"   ::= "λb.b true false"
+    , "churchbool" ::= "λb.if b then tru else fls"
+    , "realnat"    ::= "λs.s succ 0"
     , "natg"       ::= "λrec. λn. if iszero n then zero else scc (rec (pred n))"
     , "churchnat"  ::= "fix natg"
+    , "realeq"     ::= "λm. λn. realbool (equal (churchnat m) (churchnat n))"
+    , "factr"      ::= "λfct. λn. if realbool (isz n) then one else times n (fct (prd n))"
+    , "fact"       ::= "fix factr"
     ]
 
 covering
