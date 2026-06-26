@@ -37,6 +37,7 @@ testEnv =
     , "tru"        ::= "λx.λy.x"
     , "fls"        ::= "λx.λy.y"
     , "and"        ::= "λx.λy.x y fls"
+    , "or"         ::= "λx.λy.x tru y"
     , "not"        ::= "λb.λx.λy.b y x"
     , "test"       ::= "λb.λx.λy.b x y"
 
@@ -44,6 +45,18 @@ testEnv =
     , "pair"       ::= "λx. λy. λb. b x y"
     , "fst"        ::= "λp. p tru"
     , "snd"        ::= "λp. p fls"
+
+    -- list
+    , "flip"       ::= "λf. λx. λy. f y x"
+    , "nil"        ::= "λc. λn. n"
+    , "cons"       ::= "λh. λvs. λc. λn. vs c (c n h)"
+    , "any"        ::= "λvs. vs or fls"
+    , "all"        ::= "λvs. vs and tru"
+    , "isnil"      ::= "λvs. vs (λx. λy. fls) tru"
+    , "head"       ::= "λvs. snd (vs (λp.λv. (fst p) p (pair tru v)) (pair fls false))"
+    , "reverse"    ::= "λvs. vs (flip cons) nil"
+    , "tailacc"    ::= "λp. λv. pair (snd p) (cons v (snd p))"
+    , "tail"       ::= "λvs. fst ((reverse vs) tailacc (pair nil nil))"
 
     -- combined stuff
     , "isz"        ::= "λn.n (and fls) tru"
