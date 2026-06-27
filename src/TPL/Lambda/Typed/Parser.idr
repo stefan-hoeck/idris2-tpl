@@ -132,11 +132,11 @@ ptrans =
     , entry PLam   $ spaced (varName $ \b => bounded' b >>= dact . onVar)
     , entry PLamV  $ spaced [step ':' $ dpush0 PTpe]
     , entry PTpe     types
-    , entry PTpeT  $ spaced [step '.' $ dact onDot, step' "->" PTpe]
+    , entry PTpeT  $ spaced [step ')' (dact onClose), step '.' (dact onDot), step' "->" PTpe]
     ]
 
 perr : Arr32 PSz (SK q -> F1 q LamErr)
-perr = arr32 PSz (unclosedIfEOI "(" []) []
+perr = arr32 PSz (unexpected []) []
 
 reduceT : Stack b PState [<] -> Term -> Maybe Term
 reduceT [<]                  t = Just t

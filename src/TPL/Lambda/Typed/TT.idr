@@ -146,3 +146,7 @@ parameters (env : Env Def)
   typecheckAs t loc trm = Prelude.do
     (ft ** strm) <- typecheck loc trm
     check t (cast trm) strm
+
+  export
+  definition : Term -> Either LamErr Def
+  definition t = map (\(tpe ** trm) => D tpe trm) (typecheck [<] t)
