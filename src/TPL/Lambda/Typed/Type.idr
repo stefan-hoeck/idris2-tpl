@@ -38,6 +38,11 @@ IType TNat       = Nat
 IType TBool      = Bool
 IType (TFun x y) = IType x -> IType y
 
+export
+tpeAppAll : SnocList Tpe -> Tpe -> Tpe
+tpeAppAll [<]       y = y
+tpeAppAll (sx :< x) y = tpeAppAll sx (TFun x y)
+
 --------------------------------------------------------------------------------
 -- Interpolation
 --------------------------------------------------------------------------------
