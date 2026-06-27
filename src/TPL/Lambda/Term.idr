@@ -170,7 +170,7 @@ parameters (env : Env ClosedTerm)
       Just vr => Right (SVar b vr)
       Nothing => case lookup v env of
         Just ct => Right $ embed ct
-        Nothing => Left (B (Custom $ ErrBind v) b)
+        Nothing => bindErr b v
   scoped (TApp b t s)  = [| SApp (pure b) (scoped t) (scoped s) |]
   scoped (TLam b v x)  = SLam b v <$> scoped x
   scoped (TPrim b p)   = Right $ SPrim b p
