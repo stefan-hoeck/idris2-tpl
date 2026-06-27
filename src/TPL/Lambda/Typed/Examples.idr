@@ -47,14 +47,15 @@ testEnv =
     ]
 
 covering
-run : String -> Either (ParseError TpeErr) Def
+run : String -> Either (ParseError TpeErr) (t ** Value t [<])
 run s = Prelude.do
-  env <- testEnv
-  toDef env s
+  env     <- testEnv
+  D t trm <- toDef env s
+  pure (t ** eval trm)
 
 covering
 testEval : String -> IO ()
 testEval s =
   case run s of
-    Left x        => putStrLn "\{x}"
-    Right (D t _) => putStrLn "Type: \{t}"
+    Left x           => putStrLn "\{x}"
+    Right (t ** trm) => putStrLn "Type: \{t}, Value: \{trm}"
