@@ -66,9 +66,6 @@ Cast (ArTT t) ByteBounds where
 -- Type Checking
 --------------------------------------------------------------------------------
 
-typeErr : Cast t ByteBounds => t -> Tpe -> Tpe -> Either ArErr a
-typeErr t e f = Left $ B (Custom $ ErrUnify e f) (cast t)
-
 check :
      {found : _}
   -> (exp : Tpe)
@@ -78,7 +75,7 @@ check :
 check exp bb t =
   case hdecEq exp found of
     Just0 prf => Right (rewrite prf in t)
-    Nothing0  => Left $ B (Custom $ ErrUnify exp found) bb
+    Nothing0  => typeErr bb exp found
 
 typeCheckAs : (t : Tpe) -> Term -> Either ArErr (ArTT t)
 typeCheckAs t (TTrue x)     = check t x (ATrue x)
