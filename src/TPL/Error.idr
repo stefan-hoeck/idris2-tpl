@@ -46,13 +46,13 @@ parameters {0 trm    : Type}
   bindErr t v = Left $ B (Custom $ ErrBind v) (cast t)
 
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
-typeMsg e f = "Type mismatch: can't unify \{e} (expected) with \{f} (found)"
+typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
 
 export
 Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrUnify e f) = typeMsg e f
-  interpolate (ErrFun f) = typeMsg "_ -> _" f
-  interpolate (ErrUnexpFun e) = typeMsg e "_ -> _"
+  interpolate (ErrFun f) = typeMsg "a function type" f
+  interpolate (ErrUnexpFun e) = typeMsg e "a function type"
   interpolate (ErrArg e f) = typeMsg "\{e} -> _" "\{f} -> _"
   interpolate (ErrRes e f) = typeMsg "_ -> \{e}" "_ -> \{f}"
   interpolate (ErrBind v) = "Unknown variable: '\{v}'"

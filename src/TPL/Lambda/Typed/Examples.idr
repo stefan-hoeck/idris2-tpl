@@ -6,17 +6,22 @@ import TPL.Lambda.Typed.TT
 
 %default total
 
+%inline
+lamx : (t1 : Tpe) -> STerm t2 [<"x"] -> STerm (TFun t1 t2) [<]
+lamx = SLam NoBB "x"
+
+%inline
+varx : (t1 : Tpe) -> STerm t1 [<"x"]
+varx t1 = SVar NoBB t1 zero
+
 succDef : Def
-succDef =
-  D (TFun TNat TNat) (SLam NoBB "x" TNat $ SSucc NoBB $ SVar NoBB TNat zero)
+succDef = D _ (lamx TNat $ SSucc NoBB $ varx TNat)
 
 predDef : Def
-predDef =
-  D (TFun TNat TNat) (SLam NoBB "x" TNat $ SPred NoBB $ SVar NoBB TNat zero)
+predDef = D _ (lamx TNat $ SPred NoBB $ varx TNat)
 
 iszeroDef : Def
-iszeroDef =
-  D (TFun TNat TBool) (SLam NoBB "x" TNat $ SIsZ NoBB $ SVar NoBB TNat zero)
+iszeroDef = D _ (lamx TNat $ SIsZ NoBB $ varx TNat)
 
 predef : Env Def
 predef =

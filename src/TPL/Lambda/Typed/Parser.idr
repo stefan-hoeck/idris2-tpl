@@ -124,6 +124,14 @@ types =
     , opn "(" (getStack >>= \st => dput PTpe (st:>POpn))
     ]
 
+afterType : DFA q PSz SK
+afterType =
+  spaced
+    [ step ')' (dact onClose)
+    , step '.' (dact onDot)
+    , step' "->" PTpe
+    ]
+
 ptrans : Lex1 q PSz SK
 ptrans =
   lex1
@@ -132,11 +140,29 @@ ptrans =
     , entry PLam   $ spaced (varName $ \b => bounded' b >>= dact . onVar)
     , entry PLamV  $ spaced [step ':' $ dpush0 PTpe]
     , entry PTpe     types
-    , entry PTpeT  $ spaced [step ')' (dact onClose), step '.' (dact onDot), step' "->" PTpe]
+    , entry PTpeT    afterType
     ]
 
+openParen : Stack b PState st -> Bool
+openParen [<]         = False
+openParen (x :> POpn) = True
+openParen (x :> _)    = openParen x
+openParen (x :< _)    = openParen x
+
+lamErr : List String -> SK q -> F1 q LamErr
+lamErr ss sk = T1.do
+  st <- getStack
+  case openParen st of
+    True  => unclosedIfEOI "(" ss sk
+    False => unexpected ss sk
+
 perr : Arr32 PSz (SK q -> F1 q LamErr)
-perr = arr32 PSz (unexpected []) []
+perr =
+  arr32 PSz (lamErr [])
+    [ entry PLamV $ lamErr [":"]
+    , entry PTpe  $ lamErr ["Nat", "Bool", "("]
+    , entry PTpeT $ lamErr ["->", ".", ")"]
+    ]
 
 reduceT : Stack b PState [<] -> Term -> Maybe Term
 reduceT [<]                  t = Just t
