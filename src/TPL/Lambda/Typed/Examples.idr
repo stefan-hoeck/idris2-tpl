@@ -46,9 +46,9 @@ testEnv =
     , "c3"        ::= "λs : Nat -> Nat . λz : Nat . s (c2 s z)"
     , "c4"        ::= "λs : Nat -> Nat . λz : Nat . s (c3 s z)"
     , "c5"        ::= "λs : Nat -> Nat . λz : Nat . s (c4 s z)"
-    , "plus"      ::= "λm : (Nat -> Nat) -> Nat -> Nat . λn : (Nat -> Nat) -> Nat -> Nat . λs : Nat -> Nat . λz : Nat . m s (n s z)"
-    , "times"     ::= "λm : (Nat -> Nat) -> Nat -> Nat . λn : (Nat -> Nat) -> Nat -> Nat . λs : Nat -> Nat . λz : Nat . m (n s) z"
-    , "realnat"   ::= "λf : (Nat -> Nat) -> Nat -> Nat . f succ 0"
+    , "plus"      ::= "fix (λrec:Nat -> Nat -> Nat. λm:Nat. λn:Nat. if iszero m then n else rec (pred m) (succ n))"
+    , "times"     ::= "fix (λrec:Nat -> Nat -> Nat. λm:Nat. λn:Nat. if iszero m then 0 else plus n (rec (pred m) n))"
+    , "fact"      ::= "fix (λrec:Nat->Nat. λn:Nat. if iszero n then 1 else times n (rec (pred n)))"
     ]
 
 covering
