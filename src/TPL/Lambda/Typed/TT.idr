@@ -30,6 +30,7 @@ data STerm : (t : Tpe) -> (sc : Scope) -> Type where
     -> (fst  : STerm t sc)
     -> (snd  : STerm t sc)
     -> STerm t sc
+  SFix   : ByteBounds -> STerm (TFun t t) sc -> STerm t sc
   SSucc  : ByteBounds -> STerm TNat sc -> STerm TNat sc
   SPred  : ByteBounds -> STerm TNat sc -> STerm TNat sc
   SIsZ   : ByteBounds -> STerm TNat sc -> STerm TBool sc
@@ -48,6 +49,7 @@ restore (SApp b t s)         = TApp b (restore t) (restore s)
 restore (SLam b x t y)       = TLam b x t (restore y)
 restore (SPrim b p)          = TPrim b p
 restore (SIf b i x y)        = TIf b (restore i) (restore x) (restore y)
+restore (SFix b x)           = TApp b "fix" (restore x)
 restore (SSucc b x)          = TApp b "succ" (restore x)
 restore (SPred b x)          = TApp b "pred" (restore x)
 restore (SIsZ b x)           = TApp b "iszero" (restore x)
@@ -60,8 +62,10 @@ shiftImpl : GenShift (STerm t)
 shiftImpl sol son (SVar b t x)   = SVar b t (genShift sol son x)
 shiftImpl sol son (SApp b t s)   = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
 shiftImpl sol son (SLam b x t y) = SLam b x t (shiftImpl (suc sol) son y)
+shiftImpl sol son (SLam b x t y) = SLam b x t (shiftImpl (suc sol) son y)
 shiftImpl sol son (SPrim b p)    = SPrim b p
 shiftImpl sol son (SIf b i t e)  = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
+shiftImpl sol son (SFix b x)     = SFix b (shiftImpl sol son x)
 shiftImpl sol son (SSucc b x)    = SSucc b (shiftImpl sol son x)
 shiftImpl sol son (SPred b x)    = SPred b (shiftImpl sol son x)
 shiftImpl sol son (SIsZ b x)     = SIsZ b (shiftImpl sol son x)
@@ -75,6 +79,7 @@ strImpl s t (SApp b x y)   = [| SApp (pure b) (strImpl s t x) (strImpl s t y) |]
 strImpl s t (SLam b x p y) = SLam b x p <$> strImpl s (suc t) y
 strImpl s t (SPrim b p)    = Just $ SPrim b p
 strImpl s t (SIf b i x y)  = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SFix b x)     = SFix b <$> strImpl s t x
 strImpl s t (SSucc b x)    = SSucc b <$> strImpl s t x
 strImpl s t (SPred b x)    = SPred b <$> strImpl s t x
 strImpl s t (SIsZ b x)     = SIsZ b <$> strImpl s t x
@@ -88,6 +93,7 @@ embedImpl (SApp b t s)    = SApp b (embedImpl t) (embedImpl s)
 embedImpl (SLam b x p y)  = SLam b x p (embedImpl y)
 embedImpl (SPrim b p)     = SPrim b p
 embedImpl (SIf b i x y)   = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
+embedImpl (SFix b x)      = SFix b $ embedImpl x
 embedImpl (SSucc b x)     = SSucc b $ embedImpl x
 embedImpl (SPred b x)     = SPred b $ embedImpl x
 embedImpl (SIsZ b x)      = SIsZ b $ embedImpl x
@@ -132,6 +138,11 @@ parameters (env : Env Def)
       Nothing => case lookup v env of
         Just (D t ct) => Right $ (t ** embed ct)
         Nothing => bindErr b v
+  typecheck loc (TApp b (TVar b2 "fix") arg)  = Prelude.do
+    (TFun s t ** sarg) <- typecheck loc arg | (t ** _) => funErr arg t
+    case hdecEq s t of
+      Just0 p  => Right (t ** SFix b2 (replace {p = \x => STerm (TFun x t) sc} p sarg))
+      Nothing0 => typeErr arg s t
   typecheck loc (TApp b fun arg)  = Prelude.do
     (TFun s t ** sfun) <- typecheck loc fun | (t ** _) => funErr fun t
     sarg <- typecheckAs s loc arg
@@ -197,6 +208,7 @@ subst v s (SApp b t x)   = SApp b (subst v s t) (subst v s x)
 subst v s (SLam b x p y) = SLam b x p $ subst (shift v) (shift s) y
 subst v s (SPrim b p)    = SPrim b p
 subst v s (SIf b i x y)  = SIf b (subst v s i) (subst v s x) (subst v s y)
+subst v s (SFix b x)     = SFix b $ subst v s x
 subst v s (SSucc b x)    = SSucc b $ subst v s x
 subst v s (SPred b x)    = SPred b $ subst v s x
 subst v s (SIsZ b x)     = SIsZ b $ subst v s x
@@ -218,6 +230,10 @@ step (SIf b pred fst snd) =
     SPrim _ (PBool True)  => fst
     SPrim _ (PBool False) => snd
     _                     => SIf b (step pred) fst snd
+step t@(SFix b y)          =
+  case y of
+    SLam _ v tp sc   => fromMaybe t $ strengthen (suc zero) $ subst zero (shift t) sc
+    _                => SFix b $ step y
 step (SSucc b y)          =
   case y of
     SPrim b (PNat n) => SPrim b $ PNat (S n)
@@ -262,4 +278,3 @@ eval trm =
   case toValue trm of
     Just v  => v
     Nothing => eval (step trm)
-
