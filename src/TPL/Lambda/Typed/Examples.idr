@@ -14,16 +14,16 @@ lamx = SLam NoBB "x"
 varx : (t1 : Tpe) -> STerm t1 [<V "x" t1]
 varx t1 = SVar NoBB nzero
 
-succDef : Def
-succDef = D _ (lamx TNat $ SSucc NoBB $ varx TNat)
+succDef : Entry
+succDef = Def _ (lamx TNat $ SSucc NoBB $ varx TNat)
 
-predDef : Def
-predDef = D _ (lamx TNat $ SPred NoBB $ varx TNat)
+predDef : Entry
+predDef = Def _ (lamx TNat $ SPred NoBB $ varx TNat)
 
-iszeroDef : Def
-iszeroDef = D _ (lamx TNat $ SIsZ NoBB $ varx TNat)
+iszeroDef : Entry
+iszeroDef = Def _ (lamx TNat $ SIsZ NoBB $ varx TNat)
 
-predef : Env Def
+predef : Env Entry
 predef =
   fromList
     [ ("succ",   succDef)
@@ -31,36 +31,84 @@ predef =
     , ("iszero", iszeroDef)
     ]
 
-toDef : Env Def -> String -> Either (ParseError TpeErr) Def
-toDef env s =
-  mapFst (toParseError Virtual s) $ Prelude.do
-    t <- runString term s
-    definition env t
-
-testEnv : Either (ParseError TpeErr) (Env Def)
-testEnv =
-  mkEnv predef toDef
-    [ "c0"        ::= "λs : Nat -> Nat . λz : Nat . z"
-    , "c1"        ::= "λs : Nat -> Nat . λz : Nat . s (c0 s z)"
-    , "c2"        ::= "λs : Nat -> Nat . λz : Nat . s (c1 s z)"
-    , "c3"        ::= "λs : Nat -> Nat . λz : Nat . s (c2 s z)"
-    , "c4"        ::= "λs : Nat -> Nat . λz : Nat . s (c3 s z)"
-    , "c5"        ::= "λs : Nat -> Nat . λz : Nat . s (c4 s z)"
-    , "plus"      ::= "fix (λrec:Nat -> Nat -> Nat. λm:Nat. λn:Nat. if iszero m then n else rec (pred m) (succ n))"
-    , "times"     ::= "fix (λrec:Nat -> Nat -> Nat. λm:Nat. λn:Nat. if iszero m then 0 else plus n (rec (pred m) n))"
-    , "fact"      ::= "fix (λrec:Nat->Nat. λn:Nat. if iszero n then 1 else times n (rec (pred n)))"
-    ]
+covering
+process : Env Entry -> Declaration -> Either LamErr (Env Entry, Maybe String)
+process env (Decl bb nm tpe) =
+  case lookup nm env of
+    Just _  => defined bb nm
+    Nothing => Right (insert nm (Dec tpe) env, Nothing)
+process env (Defn bb nm trm) =
+  case lookup nm env of
+    Just (Dec t)  =>
+      map
+        (\v => (insert nm (Def t v) env, Nothing))
+        (typecheckAs {sc = [<]} env t trm)
+    Just (Def {}) => defined bb nm
+    Nothing       => unknown bb nm
+process env (Eval x)   =
+  map
+    (\(t ** v) => (env, Just "Type: \{t}, Value: \{eval v}"))
+    (typecheck {sc = [<]} env x)
 
 covering
-run : String -> Either (ParseError TpeErr) (t ** Value t [<])
-run s = Prelude.do
-  env     <- testEnv
-  D t trm <- toDef env s
-  pure (t ** eval trm)
+processIO : IORef (Env Entry) -> String -> Declaration -> IO ()
+processIO ref s decl = Prelude.do
+  env <- readref ref
+  case process env decl of
+    Left x           => putStrLn "\{toParseError Virtual s x}"
+    Right (env2,res) => writeref ref env2 >> traverse_ putStrLn res
+
+example : String
+example =
+  """
+  c0 : (Nat -> Nat) -> Nat -> Nat;
+  c0 = λs : Nat -> Nat . λz : Nat . z;
+
+  c1 : (Nat -> Nat) -> Nat -> Nat;
+  c1 = λs : Nat -> Nat . λz : Nat . s z;
+
+  c2 : (Nat -> Nat) -> Nat -> Nat;
+  c2 = λs : Nat -> Nat . λz : Nat . s (c1 s z);
+
+  plus : Nat -> Nat -> Nat;
+  plus =
+    fix
+      ( λrec : Nat -> Nat -> Nat
+      . λm   : Nat
+      . λn   : Nat
+      . if iszero m then n else rec (pred m) (succ n)
+      );
+
+  times : Nat -> Nat -> Nat;
+  times =
+    fix
+      ( λrec : Nat -> Nat -> Nat
+      . λm   : Nat
+      . λn   : Nat
+      . if iszero m then 0 else plus n (rec (pred m) n)
+      );
+
+  factorial : Nat -> Nat;
+  factorial =
+    fix
+      ( λrec : Nat->Nat
+      . λn   : Nat
+      . if iszero n then 1 else times n (rec (pred n))
+      );
+
+  %eval c2 succ 0;
+  %eval c2 succ 4;
+  %eval plus 100 200;
+  %eval times 100 200;
+  %eval factorial (plus 2 3);
+  """
+--     , "fact"      ::= "fix (
+--     ]
 
 covering
-testEval : String -> IO ()
-testEval s =
-  case run s of
-    Left x           => putStrLn "\{x}"
-    Right (t ** trm) => putStrLn "Type: \{t}, Value: \{trm}"
+testRun : String -> IO ()
+testRun s = Prelude.do
+  ref <- newref predef
+  case parseString decls Virtual s of
+    Left x   => putStrLn "\{x}"
+    Right ds => traverse_ (processIO ref s) ds
