@@ -62,7 +62,6 @@ shiftImpl : GenShift (STerm t)
 shiftImpl sol son (SVar b t x)   = SVar b t (genShift sol son x)
 shiftImpl sol son (SApp b t s)   = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
 shiftImpl sol son (SLam b x t y) = SLam b x t (shiftImpl (suc sol) son y)
-shiftImpl sol son (SLam b x t y) = SLam b x t (shiftImpl (suc sol) son y)
 shiftImpl sol son (SPrim b p)    = SPrim b p
 shiftImpl sol son (SIf b i t e)  = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
 shiftImpl sol son (SFix b x)     = SFix b (shiftImpl sol son x)
