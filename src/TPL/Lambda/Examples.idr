@@ -10,9 +10,9 @@ import public TPL.Name.Var
 predef : Env ClosedTerm
 predef =
   fromList
-    [ ("succ",   SLam NoBB "x" $ SSucc NoBB $ SVar NoBB zero)
-    , ("pred",   SLam NoBB "x" $ SPred NoBB $ SVar NoBB zero)
-    , ("iszero", SLam NoBB "x" $ SIsZ  NoBB $ SVar NoBB zero)
+    [ ("succ",   SLam NoBB "x" $ SSucc NoBB $ SVar NoBB nzero)
+    , ("pred",   SLam NoBB "x" $ SPred NoBB $ SVar NoBB nzero)
+    , ("iszero", SLam NoBB "x" $ SIsZ  NoBB $ SVar NoBB nzero)
     ]
 
 toTerm : Env ClosedTerm -> String -> Either (ParseError TpeErr) ClosedTerm
