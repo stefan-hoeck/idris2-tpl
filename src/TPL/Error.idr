@@ -15,6 +15,9 @@ data TplErr : Type -> Type where
   ErrArg      : (exp, found : t) -> TplErr t
   ErrRes      : (exp, found : t) -> TplErr t
   ErrBind     : (n : VarName) -> TplErr t
+  ErrDefined  : (n : VarName) -> TplErr t
+  ErrUndef    : (n : VarName) -> TplErr t
+  ErrUnknown  : (n : VarName) -> TplErr t
 
 %runElab derive "TplErr" [Show,Eq]
 
@@ -45,14 +48,29 @@ parameters {0 trm    : Type}
   bindErr : trm -> VarName -> Either (BBErr $ TplErr t) a
   bindErr t v = Left $ B (Custom $ ErrBind v) (cast t)
 
+  export
+  defined : trm -> VarName -> Either (BBErr $ TplErr t) a
+  defined t v = Left $ B (Custom $ ErrDefined v) (cast t)
+
+  export
+  undef : trm -> VarName -> Either (BBErr $ TplErr t) a
+  undef t v = Left $ B (Custom $ ErrUndef v) (cast t)
+
+  export
+  unknown : trm -> VarName -> Either (BBErr $ TplErr t) a
+  unknown t v = Left $ B (Custom $ ErrUnknown v) (cast t)
+
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
 typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
 
 export
 Interpolation t => Interpolation (TplErr t) where
-  interpolate (ErrUnify e f) = typeMsg e f
-  interpolate (ErrFun f) = typeMsg "a function type" f
+  interpolate (ErrUnify e f)  = typeMsg e f
+  interpolate (ErrFun f)      = typeMsg "a function type" f
   interpolate (ErrUnexpFun e) = typeMsg e "a function type"
-  interpolate (ErrArg e f) = typeMsg "\{e} -> _" "\{f} -> _"
-  interpolate (ErrRes e f) = typeMsg "_ -> \{e}" "_ -> \{f}"
-  interpolate (ErrBind v) = "Unknown variable: '\{v}'"
+  interpolate (ErrArg e f)    = typeMsg "\{e} -> _" "\{f} -> _"
+  interpolate (ErrRes e f)    = typeMsg "_ -> \{e}" "_ -> \{f}"
+  interpolate (ErrBind v)     = "Unknown variable: '\{v}'"
+  interpolate (ErrDefined v)  = "Function already defined: '\{v}'"
+  interpolate (ErrUnknown v)  = "Unknown function: '\{v}'"
+  interpolate (ErrUndef v)    = "Missing function definition for '\{v}'"

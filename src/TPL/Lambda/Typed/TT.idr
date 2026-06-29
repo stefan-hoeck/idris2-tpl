@@ -43,10 +43,9 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
 
 ||| Top-level definitions
 public export
-record Def where
-  constructor D
-  type : Tpe
-  term : STerm type [<]
+data Entry : Type where
+  Def : (type : Tpe) -> (term : STerm type [<]) -> Entry
+  Dec : (type : Tpe) -> Entry
 
 export
 restore : {sc : _} -> STerm t sc -> Term
@@ -121,7 +120,7 @@ check exp bb t =
     Just0 prf => Right (rewrite prf in t)
     Nothing0  => typeErr bb exp found
 
-parameters (env : Env Def)
+parameters (env : Env Entry)
 
   export
   typecheckAs : {sc : _} -> (t : Tpe) -> Term -> Either LamErr (STerm t sc)
@@ -132,9 +131,9 @@ parameters (env : Env Def)
     case findNVar ((v ==) . name) sc of
       Just (t ** nv) => Right (_ ** SVar b nv)
       Nothing => case lookup v env of
-        Just (D t ct) => Right $ (t ** embed ct)
-        Nothing => bindErr b v
-  typecheck (TApp b (TVar b2 "fix") arg)  = Prelude.do
+        Just (Def t ct) => Right $ (t ** embed ct)
+        _               => bindErr b v
+  typecheck (TApp b (TVar b2 (VN "fix")) arg)  = Prelude.do
     (TFun s t ** sarg) <- typecheck arg | (t ** _) => funErr arg t
     case hdecEq s t of
       Just0 p  => Right (t ** SFix b2 (replace {p = \x => STerm (TFun x t) sc} p sarg))
@@ -161,11 +160,6 @@ parameters (env : Env Def)
           sz <- typecheckAs ert z
           Right (SLam b v eat sz)
       _ => unexpFunErr b t
-
-  typecheckAs t (TApp b fun arg) = Prelude.do
-    (TFun at rt ** sfun) <- typecheck fun | (t ** _) => funErr fun t
-    sarg <- typecheckAs at arg
-    check t b (SApp b sfun sarg)
   typecheckAs t (TIf b i x y)   = Prelude.do
     si <- typecheckAs TBool i
     sx <- typecheckAs t x
@@ -174,10 +168,6 @@ parameters (env : Env Def)
   typecheckAs t trm = Prelude.do
     (ft ** strm) <- typecheck trm
     check t (cast trm) strm
-
-  export
-  definition : Term -> Either LamErr Def
-  definition t = map (\(tpe ** trm) => D tpe trm) (typecheck t)
 
 --------------------------------------------------------------------------------
 -- Evaluation
