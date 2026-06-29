@@ -108,8 +108,8 @@ Interpolation Term where interpolate = pretty
 --------------------------------------------------------------------------------
 
 public export
-data STerm : (sc : Scope) -> Type where
-  SVar   : ByteBounds -> (v : Var sc) -> STerm sc
+data STerm : (sc : Scope VarName) -> Type where
+  SVar   : {nm : _} -> ByteBounds -> (v : NVar nm sc) -> STerm sc
   SLam   : ByteBounds -> (v : VarName) -> STerm (sc:<v) -> STerm sc
   SApp   : ByteBounds -> (t,s : STerm sc) -> STerm sc
   SPrim  : ByteBounds -> Prim -> STerm sc
@@ -133,7 +133,7 @@ shiftImpl sol son (SPred b x)   = SPred b (shiftImpl sol son x)
 shiftImpl sol son (SIsZ b x)    = SIsZ b (shiftImpl sol son x)
 
 export %inline
-Shiftable STerm where genShift = shiftImpl
+Shiftable VarName STerm where genShift = shiftImpl
 
 strImpl : GenStrengthen STerm
 strImpl s t (SVar b x)    = SVar b <$> genStrengthen s t x
@@ -146,7 +146,7 @@ strImpl s t (SPred b x)   = SPred b <$> strImpl s t x
 strImpl s t (SIsZ b x)    = SIsZ b <$> strImpl s t x
 
 export %inline
-Strengthenable STerm where genStrengthen = strImpl
+Strengthenable VarName STerm where genStrengthen = strImpl
 
 embedImpl : Embed STerm
 embedImpl (SVar b x)      = SVar b (embed x)
@@ -159,15 +159,15 @@ embedImpl (SPred b x)     = SPred b $ embedImpl x
 embedImpl (SIsZ b x)      = SIsZ b $ embedImpl x
 
 export %inline
-Embeddable STerm where embed = embedImpl
+Embeddable VarName STerm where embed = embedImpl
 
 parameters (env : Env ClosedTerm)
 
   export
   scoped : {sc : _} -> Term -> Either LamErr (STerm sc)
   scoped (TVar b v)   =
-    case mkVar sc v of
-      Just vr => Right (SVar b vr)
+    case findNVar (v==) sc of
+      Just (nm ** vr) => Right (SVar b vr)
       Nothing => case lookup v env of
         Just ct => Right $ embed ct
         Nothing => bindErr b v
@@ -181,26 +181,26 @@ parameters (env : Env ClosedTerm)
   closed = scoped
 
 export
-restore : {sc : Scope} -> STerm sc -> Term
-restore (SVar b $ V n _ p) = TVar b (getName sc n @{p})
-restore (SApp b t s)       = TApp b (restore t) (restore s)
-restore (SLam b x y)       = TLam b x (restore y)
-restore (SPrim b p)        = TPrim b p
-restore (SIf b i x y)      = TIf b (restore i) (restore x) (restore y)
-restore (SSucc b x)        = TApp b "succ" (restore x)
-restore (SPred b x)        = TApp b "pred" (restore x)
-restore (SIsZ b x)         = TApp b "iszero" (restore x)
+restore : {sc : Scope VarName} -> STerm sc -> Term
+restore (SVar {nm} b _) = TVar b nm
+restore (SApp b t s)    = TApp b (restore t) (restore s)
+restore (SLam b x y)    = TLam b x (restore y)
+restore (SPrim b p)     = TPrim b p
+restore (SIf b i x y)   = TIf b (restore i) (restore x) (restore y)
+restore (SSucc b x)     = TApp b "succ" (restore x)
+restore (SPred b x)     = TApp b "pred" (restore x)
+restore (SIsZ b x)      = TApp b "iszero" (restore x)
 
 export
-subst : {sc : _} -> Var sc -> STerm sc -> STerm sc -> STerm sc
-subst v s (SVar b x)    = if v == x then s else SVar b x
-subst v s (SApp b t x)  = SApp b (subst v s t) (subst v s x)
-subst v s (SLam b x y)  = SLam b x $ subst (shift v) (shift s) y
-subst v s (SPrim b p)   = SPrim b p
-subst v s (SIf b i x y) = SIf b (subst v s i) (subst v s x) (subst v s y)
-subst v s (SSucc b x)   = SSucc b $ subst v s x
-subst v s (SPred b x)   = SPred b $ subst v s x
-subst v s (SIsZ b x)    = SIsZ b $ subst v s x
+subst : {sc : _} -> {n : _} -> (0 v : NVar n sc) -> STerm sc -> STerm sc -> STerm sc
+subst v s (SVar {nm} b x) = if nm == n then s else SVar b x
+subst v s (SApp b t x)    = SApp b (subst v s t) (subst v s x)
+subst v s (SLam b x y)    = SLam b x $ subst (shift v) (shift s) y
+subst v s (SPrim b p)     = SPrim b p
+subst v s (SIf b i x y)   = SIf b (subst v s i) (subst v s x) (subst v s y)
+subst v s (SSucc b x)     = SSucc b $ subst v s x
+subst v s (SPred b x)     = SPred b $ subst v s x
+subst v s (SIsZ b x)      = SIsZ b $ subst v s x
 
 --------------------------------------------------------------------------------
 -- Evaluation
@@ -217,7 +217,7 @@ step trm =
   case trm of
     SApp b (SLam bl x s) t =>
       case isVal t of
-        True  => strengthen (suc zero) $ subst zero (shift t) s
+        True  => strengthen (suc zero) $ subst nzero (shift t) s
         False => SApp b (SLam bl x s) <$> step t
     SApp b t s =>
       case step t of

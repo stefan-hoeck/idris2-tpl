@@ -7,12 +7,12 @@ import TPL.Lambda.Typed.TT
 %default total
 
 %inline
-lamx : (t1 : Tpe) -> STerm t2 [<"x"] -> STerm (TFun t1 t2) [<]
+lamx : (t1 : Tpe) -> STerm t2 [<V "x" t1] -> STerm (TFun t1 t2) [<]
 lamx = SLam NoBB "x"
 
 %inline
-varx : (t1 : Tpe) -> STerm t1 [<"x"]
-varx t1 = SVar NoBB t1 zero
+varx : (t1 : Tpe) -> STerm t1 [<V "x" t1]
+varx t1 = SVar NoBB nzero
 
 succDef : Def
 succDef = D _ (lamx TNat $ SSucc NoBB $ varx TNat)
