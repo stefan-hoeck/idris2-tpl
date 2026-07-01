@@ -11,20 +11,21 @@ import public TPL.Lambda.Typed.Term
 public export
 record TTVar where
   constructor V
-  name : VarName
+  name : BindName
   type : Tpe
 
 public export
 PrimTpe : Prim -> Tpe
 PrimTpe (PNat _)  = TNat
 PrimTpe (PBool _) = TBool
+PrimTpe PUnit     = TUnit
 
 public export
 data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
-  SVar   : {v : _} -> ByteBounds -> NVar v sc -> STerm (type v) sc
+  SVar   : {n : _} -> {t : _} -> ByteBounds -> NVar (V (NM n) t) sc -> STerm t sc
   SLam   :
        ByteBounds
-    -> (v : VarName)
+    -> (v : BindName)
     -> (s : Tpe)
     -> STerm t (sc:<V v s)
     -> STerm (TFun s t) sc
@@ -49,9 +50,9 @@ data Entry : Type where
 
 export
 restore : {sc : _} -> STerm t sc -> Term
-restore (SVar {v} b _) = TVar b v.name
+restore (SVar {n} b _) = TVar b n
 restore (SApp b t s)   = TApp b (restore t) (restore s)
-restore (SLam b x t y) = TLam b x t (restore y)
+restore (SLam b x t y) = TLam b x (pure t) (restore y)
 restore (SPrim b p)    = TPrim b p
 restore (SIf b i x y)  = TIf b (restore i) (restore x) (restore y)
 restore (SFix b x)     = TApp b "fix" (restore x)
@@ -120,54 +121,79 @@ check exp bb t =
     Just0 prf => Right (rewrite prf in t)
     Nothing0  => typeErr bb exp found
 
+fun : (0 prf : s === t) -> STerm (TFun s t) sc -> STerm (TFun t t) sc
+fun Refl x = x
+
 parameters (env : Env Entry)
 
   export
-  typecheckAs : {sc : _} -> (t : Tpe) -> Term -> Either LamErr (STerm t sc)
+  typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
 
   export
-  typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
-  typecheck (TVar b v) =
-    case findNVar ((v ==) . name) sc of
-      Just (t ** nv) => Right (_ ** SVar b nv)
-      Nothing => case lookup v env of
-        Just (Def t ct) => Right $ (t ** embed ct)
+  typecheckAs : {sc : _} -> (t : Tpe) -> Term -> Either LamErr (STerm t sc)
+  typecheckAs t (TVar b v) =
+    case findNVar ((NM v ==) . name) sc of
+      Just (V (NM n) tp ** nv) => check t b (SVar b nv)
+      _                        => case lookup v env of
+        Just (Def _ ct) => check t b (embed ct)
         _               => bindErr b v
-  typecheck (TApp b (TVar b2 (VN "fix")) arg)  = Prelude.do
+
+  typecheckAs t (TLam b v (B tpe bt) scope)   =
+    case t of
+      TFun eat ert => case hdecEq eat tpe of
+        Nothing0 => typeErr bt eat tpe
+        Just0 _  => Prelude.do
+            sscope <- typecheckAs ert scope
+            Right (SLam b v eat sscope)
+      _ => unexpFunErr b t
+
+  typecheckAs t (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
+    sarg <- typecheckAs (TFun t t) arg
+    Right (SFix b2 sarg)
+
+  typecheckAs t (TApp b fun arg) = Prelude.do
+    (ta ** sarg) <- typecheck arg
+    sfun <- typecheckAs (TFun ta t) fun
+    Right (SApp b sfun sarg)
+
+  typecheckAs t (TPrim b y)    = check t b (SPrim b y)
+
+  typecheckAs t (TIf b i y e)  = Prelude.do
+    si <- typecheckAs TBool i
+    sy <- typecheckAs t y
+    se <- typecheckAs t e
+    Right (SIf b si sy se)
+
+  typecheck (TVar b v)     =
+    case findNVar ((NM v ==) . name) sc of
+      Just (V (NM n) tp ** nv) => Right (_ ** SVar b nv)
+      _                        => case lookup v env of
+        Just (Def _ ct) => Right (_ ** embed ct)
+        _               => bindErr b v
+
+  typecheck (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
     (TFun s t ** sarg) <- typecheck arg | (t ** _) => funErr arg t
     case hdecEq s t of
-      Just0 p  => Right (t ** SFix b2 (replace {p = \x => STerm (TFun x t) sc} p sarg))
       Nothing0 => typeErr arg s t
-  typecheck (TApp b fun arg)  = Prelude.do
-    (TFun s t ** sfun) <- typecheck fun | (t ** _) => funErr fun t
-    sarg <- typecheckAs s arg
-    Right (t ** SApp b sfun sarg)
-  typecheck (TLam b v t x)= Prelude.do
-    (res ** sx) <- typecheck x
-    Right (TFun t res ** SLam b v t sx)
-  typecheck (TPrim b p)   = Right $ (PrimTpe p ** SPrim b p)
-  typecheck (TIf b i x y) = Prelude.do
-    si <- typecheckAs TBool i
-    (t ** sx) <- typecheck x
-    sy <- typecheckAs t y
-    Right (t ** SIf b si sx sy)
+      Just0 p  => Right (_ ** SFix b2 $ fun p sarg)
 
-  typecheckAs t (TLam b v at z)  =
-    case t of
-      TFun eat ert => case hdecEq eat at of
-        Nothing0 => typeErr b eat at
-        Just0 _  => Prelude.do
-          sz <- typecheckAs ert z
-          Right (SLam b v eat sz)
-      _ => unexpFunErr b t
-  typecheckAs t (TIf b i x y)   = Prelude.do
-    si <- typecheckAs TBool i
-    sx <- typecheckAs t x
-    sy <- typecheckAs t y
-    Right (SIf b si sx sy)
-  typecheckAs t trm = Prelude.do
-    (ft ** strm) <- typecheck trm
-    check t (cast trm) strm
+  typecheck (TLam b v (B tp bt) scope) = Prelude.do
+    (res ** sscope) <- typecheck scope
+    Right (TFun tp res ** SLam b v tp sscope)
+
+  typecheck (TApp b fun arg)   = Prelude.do -- todo "fix"
+    (TFun at rt ** sfun) <- typecheck fun | (t ** _) => funErr fun t
+    sarg <- typecheckAs at arg
+    Right (rt ** SApp b sfun sarg)
+
+  typecheck (TPrim b y)    = Right (_ ** SPrim b y)
+
+  typecheck (TIf b i y e)  = Prelude.do
+    si        <- typecheckAs TBool i
+    (t ** sy) <- typecheck y
+    se        <- typecheckAs t e
+    Right (t ** SIf b si sy se)
+
 
 --------------------------------------------------------------------------------
 -- Evaluation
@@ -233,7 +259,7 @@ public export
 data Value : (t : Tpe) -> (sc : Scope TTVar) -> Type where
   VPrim : (p : Prim) -> Value (PrimTpe p) sc
   VLam  :
-       (v : VarName)
+       (v : BindName)
     -> (t1 : Tpe)
     -> STerm t2 (sc:<V v t1)
     -> Value (TFun t1 t2) sc
