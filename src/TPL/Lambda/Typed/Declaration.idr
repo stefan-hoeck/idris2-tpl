@@ -8,8 +8,9 @@ import public TPL.Lambda.Typed.Term
 
 public export
 data Declaration : Type where
-  Decl : ByteBounds -> VarName -> Tpe -> Declaration
-  Defn : ByteBounds -> VarName -> Term -> Declaration
-  Eval : Term -> Declaration
+  Decl  : ByteBounds -> VarName -> RawTpe -> Declaration
+  Alias : ByteBounds -> VarName -> RawTpe -> Declaration
+  Defn  : ByteBounds -> VarName -> Term -> Declaration
+  Eval  : Term -> Declaration
 
 %runElab derive "Declaration" [Show,Eq]

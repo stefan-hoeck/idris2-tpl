@@ -29,6 +29,9 @@ predef =
     [ ("succ",   succDef)
     , ("pred",   predDef)
     , ("iszero", iszeroDef)
+    , ("Nat",    Als TNat)
+    , ("Bool",   Als TBool)
+    , ("Unit",   Als TUnit)
     ]
 
 covering
@@ -36,15 +39,19 @@ process : Env Entry -> Declaration -> Either LamErr (Env Entry, Maybe String)
 process env (Decl bb nm tpe) =
   case lookup nm env of
     Just _  => defined bb nm
-    Nothing => Right (insert nm (Dec tpe) env, Nothing)
+    Nothing => (\t => (insert nm (Dec t) env, Nothing)) <$> resolveTpe env tpe
+process env (Alias bb nm tpe) =
+  case lookup nm env of
+    Just _  => defined bb nm
+    Nothing => (\t => (insert nm (Als t) env, Nothing)) <$> resolveTpe env tpe
 process env (Defn bb nm trm) =
   case lookup nm env of
     Just (Dec t)  =>
       map
         (\v => (insert nm (Def t v) env, Nothing))
         (typecheckAs {sc = [<]} env t trm)
-    Just (Def {}) => defined bb nm
-    Nothing       => unknown bb nm
+    Just _   => defined bb nm
+    Nothing  => unknown bb nm
 process env (Eval x)   =
   map
     (\(t ** v) => (env, Just "Type: \{t}, Value: \{eval v}"))
@@ -61,14 +68,17 @@ processIO ref s decl = Prelude.do
 example : String
 example =
   """
-  c0 : (Nat -> Nat) -> Nat -> Nat;
-  c0 = λs : Nat -> Nat . λz : Nat . z;
+  %alias NatFun : Nat -> Nat;
+  %alias ChurchNat : NatFun -> NatFun;
 
-  c1 : (Nat -> Nat) -> Nat -> Nat;
-  c1 = λs : Nat -> Nat . λz : Nat . s z;
+  c0 : ChurchNat;
+  c0 = λs : NatFun . λz : Nat . z;
 
-  c2 : (Nat -> Nat) -> Nat -> Nat;
-  c2 = λs : Nat -> Nat . λz : Nat . s (c1 s z);
+  c1 : ChurchNat;
+  c1 = λs : NatFun . λz : Nat . s z;
+
+  c2 : ChurchNat;
+  c2 = λs : NatFun . λz : Nat . s (c1 s z);
 
   plus : Nat -> Nat -> Nat;
   plus =

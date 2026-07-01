@@ -28,7 +28,7 @@ data Term : Type where
   TVar   : ByteBounds -> (v : VarName) -> Term
 
   ||| Abstraction: A bound variable, its type, and its scope
-  TLam   : ByteBounds -> (v : BindName) -> (t : ByteBounded Tpe) -> (sc : Term) -> Term
+  TLam   : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (sc : Term) -> Term
 
   ||| Function application
   TApp   : ByteBounds -> (t,s : Term) -> Term
@@ -97,7 +97,7 @@ paren : Term -> String
 
 pretty : Term -> String
 pretty (TVar _ v)      = v.name
-pretty (TLam _ v t sc) = "λ\{v}: \{t.val}. \{pretty sc}"
+pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
 pretty (TIf _ i t e)   = "if \{pretty i} then \{pretty t} else \{pretty e}"

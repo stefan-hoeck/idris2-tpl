@@ -3,6 +3,7 @@ module TPL.Parser.Util
 import public TPL.Name
 import public Text.ILex
 import public Text.ILex.DStack
+import Syntax.T1
 
 %default total
 %hide Data.Linear.(.)
@@ -25,7 +26,15 @@ hexNat = like "0x" >> hexadecimal
 
 export
 ident : RExp True
-ident = (alpha <|> '_') >> star (alphaNum <|> '_' <|> '\'')
+ident = alpha >> star (alphaNum <|> '_' <|> '\'')
+
+export
+uident : RExp True
+uident = upper >> star (alphaNum <|> '_' <|> '\'')
+
+export
+linecomment : RExp True
+linecomment = "--" >> star dot
 
 --------------------------------------------------------------------------------
 -- Literals
@@ -58,8 +67,12 @@ parameters {auto hb : HasBytes s}
   idents f = [string ident f]
 
   export %inline
-  varName : (f : s q => VarName -> F1 q (Index sz)) -> Steps q sz s
-  varName f = [string ident (f . VN)]
+  varName : (f : s q => ByteBounded VarName -> F1 q (Index sz)) -> Steps q sz s
+  varName f = [string ident (\s => bounded' (VN s) >>= f)]
+
+  export %inline
+  upperName : (f : s q => ByteBounded VarName -> F1 q (Index sz)) -> Steps q sz s
+  upperName f = [string uident (\s => bounded' (VN s) >>= f)]
 
 --------------------------------------------------------------------------------
 -- Utilities
@@ -67,4 +80,4 @@ parameters {auto hb : HasBytes s}
 
   export %inline
   spaced : Steps q r s -> DFA q r s
-  spaced = dfa . jsonSpaced
+  spaced ss = dfa $ jsonSpaced (ignore' linecomment :: ss)

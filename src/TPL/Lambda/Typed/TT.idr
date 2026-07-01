@@ -47,12 +47,13 @@ public export
 data Entry : Type where
   Def : (type : Tpe) -> (term : STerm type [<]) -> Entry
   Dec : (type : Tpe) -> Entry
+  Als : (type : Tpe) -> Entry
 
 export
 restore : {sc : _} -> STerm t sc -> Term
 restore (SVar {n} b _) = TVar b n
 restore (SApp b t s)   = TApp b (restore t) (restore s)
-restore (SLam b x t y) = TLam b x (pure t) (restore y)
+restore (SLam b x t y) = TLam b x (cast t) (restore y)
 restore (SPrim b p)    = TPrim b p
 restore (SIf b i x y)  = TIf b (restore i) (restore x) (restore y)
 restore (SFix b x)     = TApp b "fix" (restore x)
@@ -125,6 +126,13 @@ fun : (0 prf : s === t) -> STerm (TFun s t) sc -> STerm (TFun t t) sc
 fun Refl x = x
 
 parameters (env : Env Entry)
+  export
+  resolveTpe : RawTpe -> Either LamErr Tpe
+  resolveTpe (PVar b v)   =
+    case lookup v env of
+      Just (Als tpe) => Right tpe
+      _              => unknown b v
+  resolveTpe (PFun b y z) = [| TFun (resolveTpe y) (resolveTpe z) |]
 
   export
   typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
@@ -138,10 +146,11 @@ parameters (env : Env Entry)
         Just (Def _ ct) => check t b (embed ct)
         _               => bindErr b v
 
-  typecheckAs t (TLam b v (B tpe bt) scope)   =
+  typecheckAs t (TLam b v rt scope)   = Prelude.do
+    tpe <- resolveTpe rt
     case t of
       TFun eat ert => case hdecEq eat tpe of
-        Nothing0 => typeErr bt eat tpe
+        Nothing0 => typeErr rt eat tpe
         Just0 _  => Prelude.do
             sscope <- typecheckAs ert scope
             Right (SLam b v eat sscope)
@@ -177,11 +186,12 @@ parameters (env : Env Entry)
       Nothing0 => typeErr arg s t
       Just0 p  => Right (_ ** SFix b2 $ fun p sarg)
 
-  typecheck (TLam b v (B tp bt) scope) = Prelude.do
+  typecheck (TLam b v rt scope) = Prelude.do
+    tp              <- resolveTpe rt
     (res ** sscope) <- typecheck scope
     Right (TFun tp res ** SLam b v tp sscope)
 
-  typecheck (TApp b fun arg)   = Prelude.do -- todo "fix"
+  typecheck (TApp b fun arg)   = Prelude.do
     (TFun at rt ** sfun) <- typecheck fun | (t ** _) => funErr fun t
     sarg <- typecheckAs at arg
     Right (rt ** SApp b sfun sarg)
