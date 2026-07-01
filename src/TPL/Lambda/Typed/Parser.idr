@@ -23,13 +23,13 @@ data PState : SnocList Type -> Type where
   PAppT  : PState [<Term,SnocList Term]
   POpn   : PState [<]
   PLam   : PState [<ByteBounds]
-  PLamV  : PState [<ByteBounds,VarName]
-  PLamT  : PState [<ByteBounds,VarName,Tpe]
+  PLamV  : PState [<ByteBounds,BindName]
+  PLamT  : PState [<ByteBounds,BindName,ByteBounded Tpe]
   PIf    : PState [<ByteBounds]
   PThen  : PState [<ByteBounds,Term]
   PElse  : PState [<ByteBounds,Term,Term]
   PTpe   : PState [<]
-  PTpeT  : PState [<SnocList Tpe,Tpe]
+  PTpeT  : PState [<SnocList (ByteBounded Tpe), ByteBounded Tpe]
   PErr   : PState [<]
 
 %runElab deriveIndexed "PState" [Show,ConIndex]
@@ -49,16 +49,16 @@ SK = DStack PState TpeErr
 
 parameters {auto sk : SK q}
   onEndTerm : Term -> StateAct q PState PSz
-  onEndTerm trm PIniN (sx:<sd:<b:<v)    t = dput PIni (sx:<(sd:<Defn b v trm)) t
-  onEndTerm trm PEval (sx:<sd)          t = dput PIni (sx:<(sd:<Eval trm)) t
-  onEndTerm trm PApp  (sx:>st)          t = onEndTerm trm st sx t
-  onEndTerm trm PAppT (sx:>st:<s:<ss)   t = onEndTerm (appAllSnoc s ss) st sx t
-  onEndTerm trm PLamT (sx:>st:<b:<v:<p) t = onEndTerm (TLam b v p trm) st sx t
-  onEndTerm trm PElse (sx:>st:<b:<x:<y) t = onEndTerm (TIf b x y trm) st sx t
-  onEndTerm trm st    sx                t = derr PErr sx st t
+  onEndTerm trm PIniN (sx:<sd:<b:<v)     t = dput PIni (sx:<(sd:<Defn b v trm)) t
+  onEndTerm trm PEval (sx:<sd)           t = dput PIni (sx:<(sd:<Eval trm)) t
+  onEndTerm trm PApp  (sx:>st)           t = onEndTerm trm st sx t
+  onEndTerm trm PAppT (sx:>st:<s:<ss)    t = onEndTerm (appAllSnoc s ss) st sx t
+  onEndTerm trm PLamT (sx:>st:<b:<v:<bt) t = onEndTerm (TLam b v bt trm) st sx t
+  onEndTerm trm PElse (sx:>st:<b:<x:<y)  t = onEndTerm (TIf b x y trm) st sx t
+  onEndTerm trm st    sx                 t = derr PErr sx st t
 
-  onEndTpe : Tpe -> StateAct q PState PSz
-  onEndTpe tpe PIniN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Decl b v tpe)) t
+  onEndTpe : ByteBounded Tpe -> StateAct q PState PSz
+  onEndTpe tpe PIniN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Decl b v tpe.val)) t
   onEndTpe tpe PTpe  (sx:>st)        t = onEndTpe tpe st sx t
   onEndTpe tpe PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll (ss:<s) tpe) st sx t
   onEndTpe _   st    sx              t = derr PErr sx st t
@@ -74,19 +74,19 @@ parameters {auto sk : SK q}
   onTerm s st sx          t = derr PErr sx st t
 
   onCloseT : Term -> StateAct q PState PSz
-  onCloseT trm POpn  (sx:>st)          t = onTerm trm st sx t
-  onCloseT trm PApp  (sx:>st)          t = onCloseT trm st sx t
-  onCloseT trm PAppT (sx:>st:<s:<ss)   t = onCloseT (appAllSnoc s ss) st sx t
-  onCloseT trm PLamT (sx:>st:<b:<v:<p) t = onCloseT (TLam b v p trm) st sx t
-  onCloseT trm PElse (sx:>st:<b:<x:<y) t = onCloseT (TIf b x y trm) st sx t
-  onCloseT trm st    sx                t = derr PErr sx st t
+  onCloseT trm POpn  (sx:>st)           t = onTerm trm st sx t
+  onCloseT trm PApp  (sx:>st)           t = onCloseT trm st sx t
+  onCloseT trm PAppT (sx:>st:<s:<ss)    t = onCloseT (appAllSnoc s ss) st sx t
+  onCloseT trm PLamT (sx:>st:<b:<v:<bt) t = onCloseT (TLam b v bt trm) st sx t
+  onCloseT trm PElse (sx:>st:<b:<x:<y)  t = onCloseT (TIf b x y trm) st sx t
+  onCloseT trm st    sx                 t = derr PErr sx st t
 
-  onTpe : Tpe -> StateAct q PState PSz
+  onTpe : ByteBounded Tpe -> StateAct q PState PSz
   onTpe tpe PTpe  sx          t = dput PTpeT (sx:<[<]:<tpe) t
   onTpe tpe PTpeT (sx:<ss:<s) t = dput PTpeT (sx:<(ss:<s):<tpe) t
   onTpe tpe st    sx          t = derr PErr sx st t
 
-  onCloseTpe : Tpe -> StateAct q PState PSz
+  onCloseTpe : ByteBounded Tpe -> StateAct q PState PSz
   onCloseTpe tpe POpn  (sx:>st)        t = onTpe tpe st sx t
   onCloseTpe tpe PTpe  (sx:>st)        t = onCloseTpe tpe st sx t
   onCloseTpe tpe PTpeT (sx:>st:<ss:<s) t = onCloseTpe (tpeAppAll (ss:<s) tpe) st sx t
@@ -99,10 +99,12 @@ parameters {auto sk : SK q}
 
   onDot : StateAct q PState PSz
   onDot PTpeT (sx:>PLamV:<ss:<s) t = dput PApp (sx:<(tpeAppAll ss s):>PLamT) t
+  onDot PLamV sx                 t = dput PApp (sx:>PLamV) t
   onDot st    sx                 t = derr PErr sx st t
 
   onIf : ByteBounds -> StateAct q PState PSz
   onIf b PApp  sx t = dput PApp (sx:>PApp:<b:>PIf) t
+  onIf b PLamV sx t = dput PApp (sx:>PLamV:<b:>PIf) t
   onIf b PLamT sx t = dput PApp (sx:>PLamT:<b:>PIf) t
   onIf b POpn  sx t = dput PApp (sx:>POpn:<b:>PIf) t
   onIf b st    sx t = derr PErr sx st t
@@ -126,9 +128,13 @@ parameters {auto sk : SK q}
       "then" => onThen st sx t
       "else" => onElse st sx t
       _      => case st of
-        PLam => dput PLamV (sx:<v.val) t
+        PLam => dput PLamV (sx:<NM v.val) t
         PIni => dput PIniN (sx:<v.bounds:<v.val) t
         _    => onTerm (TVar v.bounds v.val) st sx t
+
+  placeholder : StateAct q PState PSz
+  placeholder PLam sx t = dput PLamV (sx:<PH) t
+  placeholder st   sx t = derr PErr sx st t
 
 vars : Steps q PSz SK
 vars = varName (\b => bounded' b >>= dact . onVar)
@@ -136,6 +142,7 @@ vars = varName (\b => bounded' b >>= dact . onVar)
 atoms : Steps q PSz SK
 atoms =
      opn '(' (getStack >>= \st => dput PApp (st:>POpn))
+  :: step "unit" (bounds >>= dact . onTerm . unit)
   :: bools (\b => bounded' b >>= dact . onTerm . bool)
   ++ nats  (\b => bounded' b >>= dact . onTerm . int)
   ++ vars
@@ -150,8 +157,9 @@ atomOrClose =
 types : DFA q PSz SK
 types =
   spaced
-    [ step "Nat" (dact $ onTpe TNat)
-    , step "Bool" (dact $ onTpe TBool)
+    [ step "Nat"  (bounds >>= dact . onTpe . B TNat)
+    , step "Bool" (bounds >>= dact . onTpe . B TBool)
+    , step "Unit" (bounds >>= dact . onTpe . B TUnit)
     , opn "(" (getStack >>= \st => dput PTpe (st:>POpn))
     ]
 
@@ -171,7 +179,7 @@ ptrans =
     , entry PIniN  $ spaced [step '=' $ dpush0 PApp, step ':' $ dpush0 PTpe]
     , entry PApp     terms
     , entry PAppT    atomOrClose
-    , entry PLam   $ spaced vars
+    , entry PLam   $ spaced (step "_" (dact placeholder) :: vars)
     , entry PLamV  $ spaced [step ':' $ dpush0 PTpe]
     , entry PTpe     types
     , entry PTpeT    afterType

@@ -12,6 +12,7 @@ public export
 data Prim : Type where
   PNat  : Nat -> Prim
   PBool : Bool -> Prim
+  PUnit : Prim
 
 %runElab derive "Prim" [Show,Eq]
 
@@ -19,6 +20,7 @@ export
 Interpolation Prim where
   interpolate (PNat v)  = show v
   interpolate (PBool v) = show v
+  interpolate PUnit     = "unit"
 
 public export
 data Term : Type where
@@ -26,7 +28,7 @@ data Term : Type where
   TVar   : ByteBounds -> (v : VarName) -> Term
 
   ||| Abstraction: A bound variable, its type, and its scope
-  TLam   : ByteBounds -> (v : VarName) -> (t : Tpe) -> (sc : Term) -> Term
+  TLam   : ByteBounds -> (v : BindName) -> (t : ByteBounded Tpe) -> (sc : Term) -> Term
 
   ||| Function application
   TApp   : ByteBounds -> (t,s : Term) -> Term
@@ -67,6 +69,10 @@ export %inline
 bool : ByteBounded Bool -> Term
 bool (B b bb) = TPrim bb (PBool b)
 
+export %inline
+unit : ByteBounds -> Term
+unit bb = TPrim bb PUnit
+
 export
 appAll : Term -> List Term -> Term
 appAll s []      = s
@@ -91,7 +97,7 @@ paren : Term -> String
 
 pretty : Term -> String
 pretty (TVar _ v)      = v.name
-pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
+pretty (TLam _ v t sc) = "λ\{v}: \{t.val}. \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
 pretty (TIf _ i t e)   = "if \{pretty i} then \{pretty t} else \{pretty e}"

@@ -14,6 +14,7 @@ data TplErr : Type -> Type where
   ErrUnexpFun : (exp : t) -> TplErr t
   ErrArg      : (exp, found : t) -> TplErr t
   ErrRes      : (exp, found : t) -> TplErr t
+  ErrInfer    : (n : BindName) -> TplErr t
   ErrBind     : (n : VarName) -> TplErr t
   ErrDefined  : (n : VarName) -> TplErr t
   ErrUndef    : (n : VarName) -> TplErr t
@@ -49,6 +50,10 @@ parameters {0 trm    : Type}
   bindErr t v = Left $ B (Custom $ ErrBind v) (cast t)
 
   export
+  cantInfer : trm -> BindName -> Either (BBErr $ TplErr t) a
+  cantInfer t v = Left $ B (Custom $ ErrInfer v) (cast t)
+
+  export
   defined : trm -> VarName -> Either (BBErr $ TplErr t) a
   defined t v = Left $ B (Custom $ ErrDefined v) (cast t)
 
@@ -70,6 +75,7 @@ Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrUnexpFun e) = typeMsg e "a function type"
   interpolate (ErrArg e f)    = typeMsg "\{e} -> _" "\{f} -> _"
   interpolate (ErrRes e f)    = typeMsg "_ -> \{e}" "_ -> \{f}"
+  interpolate (ErrInfer v)    = "Can't infer type for '\{v}'"
   interpolate (ErrBind v)     = "Unknown variable: '\{v}'"
   interpolate (ErrDefined v)  = "Function already defined: '\{v}'"
   interpolate (ErrUnknown v)  = "Unknown function: '\{v}'"

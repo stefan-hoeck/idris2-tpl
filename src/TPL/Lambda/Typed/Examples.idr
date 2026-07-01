@@ -101,9 +101,8 @@ example =
   %eval plus 100 200;
   %eval times 100 200;
   %eval factorial (plus 2 3);
+  %eval (λ_: Nat. λx: Nat. x) 12 13;
   """
---     , "fact"      ::= "fix (
---     ]
 
 covering
 testRun : String -> IO ()
