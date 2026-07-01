@@ -89,7 +89,7 @@ atoms =
      opn '(' (getStack >>= \st => dput PApp (st:>POpn))
   :: bools (\b => bounded' b >>= dact . onTerm . bool)
   ++ nats  (\b => bounded' b >>= dact . onTerm . int)
-  ++ varName (\b => bounded' b >>= dact . onVar)
+  ++ varName (dact . onVar)
 
 terms : DFA q PSz SK
 terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dpush PLam) :: atoms
@@ -102,7 +102,7 @@ ptrans =
   lex1
     [ entry PApp     terms
     , entry PAppT    atomOrClose
-    , entry PLam   $ spaced (varName $ \b => bounded' b >>= dact . onVar)
+    , entry PLam   $ spaced (varName $ dact . onVar)
     , entry PLamV  $ spaced [step '.' $ dpush0 PApp]
     ]
 

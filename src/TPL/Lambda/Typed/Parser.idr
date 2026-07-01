@@ -19,17 +19,19 @@ data PState : SnocList Type -> Type where
   PIni   : PState [<SnocList Declaration]
   PIniN  : PState [<SnocList Declaration,ByteBounds,VarName]
   PEval  : PState [<SnocList Declaration]
+  PAls   : PState [<SnocList Declaration]
+  PAlsN  : PState [<SnocList Declaration,ByteBounds,VarName]
   PApp   : PState [<]
   PAppT  : PState [<Term,SnocList Term]
   POpn   : PState [<]
   PLam   : PState [<ByteBounds]
   PLamV  : PState [<ByteBounds,BindName]
-  PLamT  : PState [<ByteBounds,BindName,ByteBounded Tpe]
+  PLamT  : PState [<ByteBounds,BindName,RawTpe]
   PIf    : PState [<ByteBounds]
   PThen  : PState [<ByteBounds,Term]
   PElse  : PState [<ByteBounds,Term,Term]
   PTpe   : PState [<]
-  PTpeT  : PState [<SnocList (ByteBounded Tpe), ByteBounded Tpe]
+  PTpeT  : PState [<SnocList RawTpe, RawTpe]
   PErr   : PState [<]
 
 %runElab deriveIndexed "PState" [Show,ConIndex]
@@ -57,8 +59,9 @@ parameters {auto sk : SK q}
   onEndTerm trm PElse (sx:>st:<b:<x:<y)  t = onEndTerm (TIf b x y trm) st sx t
   onEndTerm trm st    sx                 t = derr PErr sx st t
 
-  onEndTpe : ByteBounded Tpe -> StateAct q PState PSz
-  onEndTpe tpe PIniN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Decl b v tpe.val)) t
+  onEndTpe : RawTpe -> StateAct q PState PSz
+  onEndTpe tpe PIniN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Decl b v tpe)) t
+  onEndTpe tpe PAlsN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Alias b v tpe)) t
   onEndTpe tpe PTpe  (sx:>st)        t = onEndTpe tpe st sx t
   onEndTpe tpe PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll (ss:<s) tpe) st sx t
   onEndTpe _   st    sx              t = derr PErr sx st t
@@ -81,12 +84,12 @@ parameters {auto sk : SK q}
   onCloseT trm PElse (sx:>st:<b:<x:<y)  t = onCloseT (TIf b x y trm) st sx t
   onCloseT trm st    sx                 t = derr PErr sx st t
 
-  onTpe : ByteBounded Tpe -> StateAct q PState PSz
+  onTpe : RawTpe -> StateAct q PState PSz
   onTpe tpe PTpe  sx          t = dput PTpeT (sx:<[<]:<tpe) t
   onTpe tpe PTpeT (sx:<ss:<s) t = dput PTpeT (sx:<(ss:<s):<tpe) t
   onTpe tpe st    sx          t = derr PErr sx st t
 
-  onCloseTpe : ByteBounded Tpe -> StateAct q PState PSz
+  onCloseTpe : RawTpe -> StateAct q PState PSz
   onCloseTpe tpe POpn  (sx:>st)        t = onTpe tpe st sx t
   onCloseTpe tpe PTpe  (sx:>st)        t = onCloseTpe tpe st sx t
   onCloseTpe tpe PTpeT (sx:>st:<ss:<s) t = onCloseTpe (tpeAppAll (ss:<s) tpe) st sx t
@@ -121,6 +124,10 @@ parameters {auto sk : SK q}
   onEval PIni sx t = dput PApp (sx:>PEval) t
   onEval st   sx t = derr PErr sx st t
 
+  onAlias : StateAct q PState PSz
+  onAlias PIni sx t = dput PAls sx t
+  onAlias st   sx t = derr PErr sx st t
+
   onVar : ByteBounded VarName -> StateAct q PState PSz
   onVar v st sx t =
     case v.val.name of
@@ -130,6 +137,7 @@ parameters {auto sk : SK q}
       _      => case st of
         PLam => dput PLamV (sx:<NM v.val) t
         PIni => dput PIniN (sx:<v.bounds:<v.val) t
+        PAls => dput PAlsN (sx:<v.bounds:<v.val) t
         _    => onTerm (TVar v.bounds v.val) st sx t
 
   placeholder : StateAct q PState PSz
@@ -137,7 +145,7 @@ parameters {auto sk : SK q}
   placeholder st   sx t = derr PErr sx st t
 
 vars : Steps q PSz SK
-vars = varName (\b => bounded' b >>= dact . onVar)
+vars = varName (dact . onVar)
 
 atoms : Steps q PSz SK
 atoms =
@@ -156,12 +164,9 @@ atomOrClose =
 
 types : DFA q PSz SK
 types =
-  spaced
-    [ step "Nat"  (bounds >>= dact . onTpe . B TNat)
-    , step "Bool" (bounds >>= dact . onTpe . B TBool)
-    , step "Unit" (bounds >>= dact . onTpe . B TUnit)
-    , opn "(" (getStack >>= \st => dput PTpe (st:>POpn))
-    ]
+  spaced $
+       opn "(" (getStack >>= \st => dput PTpe (st:>POpn))
+    :: upperName (dact . onTpe . pvar)
 
 afterType : DFA q PSz SK
 afterType =
@@ -175,11 +180,13 @@ afterType =
 ptrans : Lex1 q PSz SK
 ptrans =
   lex1
-    [ entry PIni   $ spaced $ step "%eval" (dact onEval) :: vars
+    [ entry PIni   $ spaced $ step "%alias" (dact onAlias) :: step "%eval" (dact onEval) :: vars
     , entry PIniN  $ spaced [step '=' $ dpush0 PApp, step ':' $ dpush0 PTpe]
     , entry PApp     terms
     , entry PAppT    atomOrClose
-    , entry PLam   $ spaced (step "_" (dact placeholder) :: vars)
+    , entry PAls   $ spaced $ upperName (dact . onVar)
+    , entry PAlsN  $ spaced [step ':' $ dpush0 PTpe]
+    , entry PLam   $ spaced (step '_' (dact placeholder) :: vars)
     , entry PLamV  $ spaced [step ':' $ dpush0 PTpe]
     , entry PTpe     types
     , entry PTpeT    afterType
@@ -215,7 +222,7 @@ peoi st sk t =
 
 public export
 decls : P1 q LamErr (List Declaration)
-decls = P (cast PApp) (init $ [<[<]]:>PIni) ptrans (\x => (Nothing #)) perr peoi
+decls = P (cast PIni) (init $ [<[<]]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 
 --------------------------------------------------------------------------------
 -- Proofs
@@ -224,6 +231,8 @@ decls = P (cast PApp) (init $ [<[<]]:>PIni) ptrans (\x => (Nothing #)) perr peoi
 inBoundsPState PIni   = Refl
 inBoundsPState PIniN  = Refl
 inBoundsPState PEval  = Refl
+inBoundsPState PAls   = Refl
+inBoundsPState PAlsN  = Refl
 inBoundsPState PApp   = Refl
 inBoundsPState PAppT  = Refl
 inBoundsPState POpn   = Refl

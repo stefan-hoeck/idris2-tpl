@@ -78,5 +78,5 @@ Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrInfer v)    = "Can't infer type for '\{v}'"
   interpolate (ErrBind v)     = "Unknown variable: '\{v}'"
   interpolate (ErrDefined v)  = "Function already defined: '\{v}'"
-  interpolate (ErrUnknown v)  = "Unknown function: '\{v}'"
+  interpolate (ErrUnknown v)  = "Unknown name: '\{v}'"
   interpolate (ErrUndef v)    = "Missing function definition for '\{v}'"
