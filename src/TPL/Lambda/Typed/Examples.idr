@@ -106,6 +106,7 @@ example =
       . if iszero n then 1 else times n (rec (pred n))
       );
 
+  %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
   %eval c2 succ 4;
   %eval plus 100 200;

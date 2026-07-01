@@ -82,6 +82,11 @@ export %inline
 appAllSnoc : Term -> SnocList Term -> Term
 appAllSnoc s = appAll s . (<>>[])
 
+export %inline
+seq : SnocList Term -> Term -> Term
+seq [<]     t = t
+seq (ss:<s) t = seq ss $ TApp NoBB (TLam NoBB PH (PVar NoBB "Unit") t) s
+
 --------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------

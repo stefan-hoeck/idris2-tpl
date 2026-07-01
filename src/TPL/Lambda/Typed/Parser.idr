@@ -24,6 +24,7 @@ data PState : SnocList Type -> Type where
   PApp   : PState [<]
   PAppT  : PState [<Term,SnocList Term]
   POpn   : PState [<]
+  PSeq   : PState [<SnocList Term]
   PLam   : PState [<ByteBounds]
   PLamV  : PState [<ByteBounds,BindName]
   PLamT  : PState [<ByteBounds,BindName,RawTpe]
@@ -57,6 +58,8 @@ parameters {auto sk : SK q}
   onEndTerm trm PAppT (sx:>st:<s:<ss)    t = onEndTerm (appAllSnoc s ss) st sx t
   onEndTerm trm PLamT (sx:>st:<b:<v:<bt) t = onEndTerm (TLam b v bt trm) st sx t
   onEndTerm trm PElse (sx:>st:<b:<x:<y)  t = onEndTerm (TIf b x y trm) st sx t
+  onEndTerm trm POpn  sx                 t = dput PApp (sx:<[<trm]:>PSeq) t
+  onEndTerm trm PSeq  (sx:<ss)           t = dput PApp (sx:<(ss:<trm):>PSeq) t
   onEndTerm trm st    sx                 t = derr PErr sx st t
 
   onEndTpe : RawTpe -> StateAct q PState PSz
@@ -66,10 +69,10 @@ parameters {auto sk : SK q}
   onEndTpe tpe PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll (ss:<s) tpe) st sx t
   onEndTpe _   st    sx              t = derr PErr sx st t
 
-  onEnd : StateAct q PState PSz
-  onEnd PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll ss s) st sx t
-  onEnd PAppT (sx:>st:<s:<ss) t = onEndTerm (appAllSnoc s ss) st sx t
-  onEnd st    sx              t = derr PErr sx st t
+  onSemi : StateAct q PState PSz
+  onSemi PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll ss s) st sx t
+  onSemi PAppT (sx:>st:<s:<ss) t = onEndTerm (appAllSnoc s ss) st sx t
+  onSemi st    sx              t = derr PErr sx st t
 
   onTerm : Term -> StateAct q PState PSz
   onTerm s PApp  sx       t = dput PAppT (sx:<s:<[<]) t
@@ -78,6 +81,7 @@ parameters {auto sk : SK q}
 
   onCloseT : Term -> StateAct q PState PSz
   onCloseT trm POpn  (sx:>st)           t = onTerm trm st sx t
+  onCloseT trm PSeq  (sx:>st:<ss)       t = onTerm (seq ss trm) st sx t
   onCloseT trm PApp  (sx:>st)           t = onCloseT trm st sx t
   onCloseT trm PAppT (sx:>st:<s:<ss)    t = onCloseT (appAllSnoc s ss) st sx t
   onCloseT trm PLamT (sx:>st:<b:<v:<bt) t = onCloseT (TLam b v bt trm) st sx t
@@ -160,7 +164,7 @@ terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dpush PLam) :: atoms
 
 atomOrClose : DFA q PSz SK
 atomOrClose =
-  spaced $ step ';' (dact onEnd) :: close ')' (dact onClose) :: atoms
+  spaced $ step ';' (dact onSemi) :: close ')' (dact onClose) :: atoms
 
 types : DFA q PSz SK
 types =
@@ -173,7 +177,7 @@ afterType =
   spaced
     [ step ')' (dact onClose)
     , step '.' (dact onDot)
-    , step ';' (dact onEnd)
+    , step ';' (dact onSemi)
     , step' "->" PTpe
     ]
 
@@ -236,6 +240,7 @@ inBoundsPState PAlsN  = Refl
 inBoundsPState PApp   = Refl
 inBoundsPState PAppT  = Refl
 inBoundsPState POpn   = Refl
+inBoundsPState PSeq   = Refl
 inBoundsPState PLam   = Refl
 inBoundsPState PLamV  = Refl
 inBoundsPState PLamT  = Refl
