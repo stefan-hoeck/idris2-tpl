@@ -27,6 +27,11 @@ Cast RawTpe ByteBounds where
   cast (PFun b _ _) = b
 
 export
+MapBounds RawTpe where
+  mapBounds f (PVar b v)   = PVar (f b) v
+  mapBounds f (PFun b x y) = PFun (f b) (mapBounds f x) (mapBounds f y)
+
+export
 tpeAppAll : SnocList RawTpe -> RawTpe -> RawTpe
 tpeAppAll [<]       y = y
 tpeAppAll (sx :< x) y = tpeAppAll sx (PFun (cast x <+> cast y) x y)

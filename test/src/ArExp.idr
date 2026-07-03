@@ -28,7 +28,7 @@ prop_roundtrip : Property
 prop_roundtrip =
   property $ Prelude.do
     t <- forAll terms
-    Right t === map emptyBounds (parseString term Virtual "\{t}")
+    Right t === map clearBounds (parseString term Virtual "\{t}")
 
 export
 props : Group
