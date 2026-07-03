@@ -14,3 +14,17 @@ data Declaration : Type where
   Eval  : Term -> Declaration
 
 %runElab derive "Declaration" [Show,Eq]
+
+export
+Interpolation Declaration where
+  interpolate (Decl _ n z)  = "\{n} : \{z};"
+  interpolate (Alias _ n z) = "%alias \{n} : \{z};"
+  interpolate (Defn _ n z)  = "\{n} = \{z};"
+  interpolate (Eval t)      = "%eval \{t};"
+
+export
+MapBounds Declaration where
+  mapBounds f (Decl b y z) = Decl (f b) y (mapBounds f z)
+  mapBounds f (Alias b y z) = Alias (f b) y (mapBounds f z)
+  mapBounds f (Defn b y z) = Defn (f b) y (mapBounds f z)
+  mapBounds f (Eval t) = Eval (mapBounds f t)

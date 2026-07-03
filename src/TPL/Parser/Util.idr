@@ -25,12 +25,16 @@ hexNat : RExp True
 hexNat = like "0x" >> hexadecimal
 
 export
+identchar : RExp True
+identchar = alphaNum <|> '_' <|> '\''
+
+export
 ident : RExp True
-ident = alpha >> star (alphaNum <|> '_' <|> '\'')
+ident = alpha >> star identchar
 
 export
 uident : RExp True
-uident = upper >> star (alphaNum <|> '_' <|> '\'')
+uident = upper >> star identchar
 
 export
 linecomment : RExp True
