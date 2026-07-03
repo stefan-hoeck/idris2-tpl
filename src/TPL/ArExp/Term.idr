@@ -30,19 +30,15 @@ Cast Term ByteBounds where
   cast (TIf x _ _ _) = x
 
 export
-adjBounds : (ByteBounds -> ByteBounds) -> Term -> Term
-adjBounds f (TTrue x)     = TTrue (f x)
-adjBounds f (TFalse x)    = TFalse (f x)
-adjBounds f (TIf x i t e) =
-  TIf (f x) (adjBounds f i) (adjBounds f t) (adjBounds f e)
-adjBounds f (TZ x)        = TZ (f x)
-adjBounds f (TSucc x y)   = TSucc (f x) (adjBounds f y)
-adjBounds f (TPred x y)   = TPred (f x) (adjBounds f y)
-adjBounds f (TIsZ x y)    = TIsZ (f x) (adjBounds f y)
-
-export %inline
-emptyBounds : Term -> Term
-emptyBounds = adjBounds (const NoBB)
+MapBounds Term where
+  mapBounds f (TTrue x)     = TTrue (f x)
+  mapBounds f (TFalse x)    = TFalse (f x)
+  mapBounds f (TIf x i t e) =
+    TIf (f x) (mapBounds f i) (mapBounds f t) (mapBounds f e)
+  mapBounds f (TZ x)        = TZ (f x)
+  mapBounds f (TSucc x y)   = TSucc (f x) (mapBounds f y)
+  mapBounds f (TPred x y)   = TPred (f x) (mapBounds f y)
+  mapBounds f (TIsZ x y)    = TIsZ (f x) (mapBounds f y)
 
 export
 isConst : Term -> Bool

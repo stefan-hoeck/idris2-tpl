@@ -58,6 +58,15 @@ Cast Term ByteBounds where
   cast (TIf x _ _ _)  = x
 
 export
+MapBounds Term where
+  mapBounds f (TVar x v)      = TVar (f x) v
+  mapBounds f (TLam x v t sc) = TLam (f x) v (mapBounds f t) (mapBounds f sc)
+  mapBounds f (TApp x t s)    = TApp (f x) (mapBounds f t) (mapBounds f s)
+  mapBounds f (TPrim x y)     = TPrim (f x) y
+  mapBounds f (TIf x i t e)   =
+    TIf (f x) (mapBounds f i) (mapBounds f t) (mapBounds f e)
+
+export
 nat : ByteBounds -> Nat -> Term
 nat bb n = TPrim bb (PNat n)
 
