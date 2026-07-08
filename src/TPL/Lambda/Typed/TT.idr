@@ -126,6 +126,11 @@ fun : (0 prf : s === t) -> STerm (TFun s t) sc -> STerm (TFun t t) sc
 fun Refl x = x
 
 parameters (env : Env Entry)
+  resolvePairs :
+       SnocList (VarName,Tpe)
+    -> List (VarName,RawTpe)
+    -> Either LamErr Tpe
+
   export
   resolveTpe : RawTpe -> Either LamErr Tpe
   resolveTpe (PVar b v)   =
@@ -133,6 +138,13 @@ parameters (env : Env Entry)
       Just (Als tpe) => Right tpe
       _              => unknown b v
   resolveTpe (PFun b y z) = [| TFun (resolveTpe y) (resolveTpe z) |]
+  resolveTpe (PRec _ ps)  = resolvePairs [<] ps
+
+  resolvePairs sp []          = Right (TRec $ sp <>> [])
+  resolvePairs sp ((v,t)::ps) =
+    case resolveTpe t of
+      Left x  => Left x
+      Right x => resolvePairs (sp:<(v,x)) ps
 
   export
   typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
