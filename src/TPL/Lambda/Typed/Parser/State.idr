@@ -163,15 +163,9 @@ else' st sx =
 
 export
 var : ByteBounded VarName -> StateTrans STATE
-var v st sx =
-  case v.val.name of
-    "if"   => if' v.bounds st sx
-    "then" => then' st sx
-    "else" => else' st sx
-    _      => case st of
-      LAMBDA => sx:<NM v.val:>LAMBDA_VAR
-      TOP    => sx:<v:>TOP_FUNNAME
-      _      => atom (TVar v.bounds v.val) st sx
+var v LAMBDA sx = sx:<NM v.val:>LAMBDA_VAR
+var v TOP    sx = sx:<v:>TOP_FUNNAME
+var v st     sx = atom (TVar v.bounds v.val) st sx
 
 export
 placeholder : StateTrans STATE
