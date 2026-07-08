@@ -214,28 +214,3 @@ openBounds (_:<b:>TYPE_OPEN) = Just b
 openBounds (_:<b:<_:>SEQ)    = Just b
 openBounds (x:>_)            = openBounds x
 openBounds (x:<_)            = openBounds x
-
-
-seq : List (StateTrans STATE) -> Stack True STATE [<]
-seq = foldl (\sk,f => let sx:>st := sk in f st sx) ([<[<]]:>TOP)
-
-test : Stack True STATE [<]
-test =
-  seq
-    [ eval
-    , openTerm NoBB
-    , if' NoBB
-    , atom (unit NoBB)
-    , then'
-    , atom (unit NoBB)
-    , else'
-    , atom (unit NoBB)
-    , openTerm NoBB
-    , atom (unit NoBB)
-    , atom (unit NoBB)
-    , closeTerm
-    , atom (unit NoBB)
-    , closeTerm
-    , atom (unit NoBB)
-    , termSemicolon
-    ]
