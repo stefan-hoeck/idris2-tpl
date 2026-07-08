@@ -1,252 +1,166 @@
 module TPL.Lambda.Typed.Parser
 
-import Derive.Prelude
 import Syntax.T1
+import TPL.Lambda.Typed.Parser.State
 import TPL.Parser.Util
 import public TPL.Lambda.Typed.Declaration
 
 %default total
 %hide Data.Linear.(.)
-%hide Language.Reflection.Types.PLam
-%hide Language.Reflection.Types.PApp
-%language ElabReflection
 
 --------------------------------------------------------------------------------
 -- Parser Stack
 --------------------------------------------------------------------------------
 
-data PState : SnocList Type -> Type where
-  PIni   : PState [<SnocList Declaration]
-  PIniN  : PState [<SnocList Declaration,ByteBounds,VarName]
-  PEval  : PState [<SnocList Declaration]
-  PAls   : PState [<SnocList Declaration]
-  PAlsN  : PState [<SnocList Declaration,ByteBounds,VarName]
-  PApp   : PState [<]
-  PAppT  : PState [<Term,SnocList Term]
-  POpn   : PState [<]
-  PSeq   : PState [<SnocList Term]
-  PLam   : PState [<ByteBounds]
-  PLamV  : PState [<ByteBounds,BindName]
-  PLamT  : PState [<ByteBounds,BindName,RawTpe]
-  PIf    : PState [<ByteBounds]
-  PThen  : PState [<ByteBounds,Term]
-  PElse  : PState [<ByteBounds,Term,Term]
-  PTpe   : PState [<]
-  PTpeT  : PState [<SnocList RawTpe, RawTpe]
-  PErr   : PState [<]
-
-%runElab deriveIndexed "PState" [Show,ConIndex]
-
 PSz : Bits32
-PSz = 1 + cast (conIndexPState PErr)
+PSz = 1 + cast (conIndexSTATE ERR)
 
-inBoundsPState : (s : PState ts) -> (cast (conIndexPState s) < PSz) === True
+inBoundsSTATE : (s : STATE ts) -> (cast (conIndexSTATE s) < PSz) === True
 
 export %inline
-Cast (PState ts) (Index PSz) where
-  cast v = I (cast $ conIndexPState v) @{mkLT $ inBoundsPState v}
+Cast (STATE ts) (Index PSz) where
+  cast v = I (cast $ conIndexSTATE v) @{mkLT $ inBoundsSTATE v}
 
 public export
 0 SK : Type -> Type
-SK = DStack PState TpeErr
-
-parameters {auto sk : SK q}
-  onEndTerm : Term -> StateAct q PState PSz
-  onEndTerm trm PIniN (sx:<sd:<b:<v)     t = dput PIni (sx:<(sd:<Defn b v trm)) t
-  onEndTerm trm PEval (sx:<sd)           t = dput PIni (sx:<(sd:<Eval trm)) t
-  onEndTerm trm PApp  (sx:>st)           t = onEndTerm trm st sx t
-  onEndTerm trm PAppT (sx:>st:<s:<ss)    t = onEndTerm (appAllSnoc s ss) st sx t
-  onEndTerm trm PLamT (sx:>st:<b:<v:<bt) t = onEndTerm (TLam b v bt trm) st sx t
-  onEndTerm trm PElse (sx:>st:<b:<x:<y)  t = onEndTerm (TIf b x y trm) st sx t
-  onEndTerm trm POpn  sx                 t = dput PApp (sx:<[<trm]:>PSeq) t
-  onEndTerm trm PSeq  (sx:<ss)           t = dput PApp (sx:<(ss:<trm):>PSeq) t
-  onEndTerm trm st    sx                 t = derr PErr sx st t
-
-  onEndTpe : RawTpe -> StateAct q PState PSz
-  onEndTpe tpe PIniN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Decl b v tpe)) t
-  onEndTpe tpe PAlsN (sx:<sd:<b:<v)  t = dput PIni (sx:<(sd:<Alias b v tpe)) t
-  onEndTpe tpe PTpe  (sx:>st)        t = onEndTpe tpe st sx t
-  onEndTpe tpe PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll (ss:<s) tpe) st sx t
-  onEndTpe _   st    sx              t = derr PErr sx st t
-
-  onSemi : StateAct q PState PSz
-  onSemi PTpeT (sx:>st:<ss:<s) t = onEndTpe (tpeAppAll ss s) st sx t
-  onSemi PAppT (sx:>st:<s:<ss) t = onEndTerm (appAllSnoc s ss) st sx t
-  onSemi st    sx              t = derr PErr sx st t
-
-  onTerm : Term -> StateAct q PState PSz
-  onTerm s PApp  sx       t = dput PAppT (sx:<s:<[<]) t
-  onTerm s PAppT (sx:<ss) t = dput PAppT (sx:<(ss:<s)) t
-  onTerm s st sx          t = derr PErr sx st t
-
-  onCloseT : Term -> StateAct q PState PSz
-  onCloseT trm POpn  (sx:>st)           t = onTerm trm st sx t
-  onCloseT trm PSeq  (sx:>st:<ss)       t = onTerm (seq ss trm) st sx t
-  onCloseT trm PApp  (sx:>st)           t = onCloseT trm st sx t
-  onCloseT trm PAppT (sx:>st:<s:<ss)    t = onCloseT (appAllSnoc s ss) st sx t
-  onCloseT trm PLamT (sx:>st:<b:<v:<bt) t = onCloseT (TLam b v bt trm) st sx t
-  onCloseT trm PElse (sx:>st:<b:<x:<y)  t = onCloseT (TIf b x y trm) st sx t
-  onCloseT trm st    sx                 t = derr PErr sx st t
-
-  onTpe : RawTpe -> StateAct q PState PSz
-  onTpe tpe PTpe  sx          t = dput PTpeT (sx:<[<]:<tpe) t
-  onTpe tpe PTpeT (sx:<ss:<s) t = dput PTpeT (sx:<(ss:<s):<tpe) t
-  onTpe tpe st    sx          t = derr PErr sx st t
-
-  onCloseTpe : RawTpe -> StateAct q PState PSz
-  onCloseTpe tpe POpn  (sx:>st)        t = onTpe tpe st sx t
-  onCloseTpe tpe PTpe  (sx:>st)        t = onCloseTpe tpe st sx t
-  onCloseTpe tpe PTpeT (sx:>st:<ss:<s) t = onCloseTpe (tpeAppAll (ss:<s) tpe) st sx t
-  onCloseTpe tpe st    sx              t = derr PErr sx st t
-
-  onClose : StateAct q PState PSz
-  onClose PAppT (sx:>st:<s:<ss) t = onCloseT (appAllSnoc s ss) st sx t
-  onClose PTpeT (sx:>st:<ss:<s) t = onCloseTpe (tpeAppAll ss s) st sx t
-  onClose st    sx              t = derr PErr sx st t
-
-  onDot : StateAct q PState PSz
-  onDot PTpeT (sx:>PLamV:<ss:<s) t = dput PApp (sx:<(tpeAppAll ss s):>PLamT) t
-  onDot PLamV sx                 t = dput PApp (sx:>PLamV) t
-  onDot st    sx                 t = derr PErr sx st t
-
-  onIf : ByteBounds -> StateAct q PState PSz
-  onIf b PApp  sx t = dput PApp (sx:>PApp:<b:>PIf) t
-  onIf b PLamV sx t = dput PApp (sx:>PLamV:<b:>PIf) t
-  onIf b PLamT sx t = dput PApp (sx:>PLamT:<b:>PIf) t
-  onIf b POpn  sx t = dput PApp (sx:>POpn:<b:>PIf) t
-  onIf b st    sx t = derr PErr sx st t
-
-  onThen : StateAct q PState PSz
-  onThen PAppT (sx:>PIf:<s:<ss) t = dput PApp (sx:<appAllSnoc s ss:>PThen) t
-  onThen st    sx               t = derr PErr sx st t
-
-  onElse : StateAct q PState PSz
-  onElse PAppT (sx:>PThen:<s:<ss) t = dput PApp (sx:<appAllSnoc s ss:>PElse) t
-  onElse st    sx                 t = derr PErr sx st t
-
-  onEval : StateAct q PState PSz
-  onEval PIni sx t = dput PApp (sx:>PEval) t
-  onEval st   sx t = derr PErr sx st t
-
-  onAlias : StateAct q PState PSz
-  onAlias PIni sx t = dput PAls sx t
-  onAlias st   sx t = derr PErr sx st t
-
-  onVar : ByteBounded VarName -> StateAct q PState PSz
-  onVar v st sx t =
-    case v.val.name of
-      "if"   => onIf v.bounds st sx t
-      "then" => onThen st sx t
-      "else" => onElse st sx t
-      _      => case st of
-        PLam => dput PLamV (sx:<NM v.val) t
-        PIni => dput PIniN (sx:<v.bounds:<v.val) t
-        PAls => dput PAlsN (sx:<v.bounds:<v.val) t
-        _    => onTerm (TVar v.bounds v.val) st sx t
-
-  placeholder : StateAct q PState PSz
-  placeholder PLam sx t = dput PLamV (sx:<PH) t
-  placeholder st   sx t = derr PErr sx st t
-
-vars : Steps q PSz SK
-vars = varName (dact . onVar)
-
-atoms : Steps q PSz SK
-atoms =
-     opn '(' (getStack >>= \st => dput PApp (st:>POpn))
-  :: step "unit" (bounds >>= dact . onTerm . unit)
-  :: bools (\b => bounded' b >>= dact . onTerm . bool)
-  ++ nats  (\b => bounded' b >>= dact . onTerm . int)
-  ++ vars
-
-terms : DFA q PSz SK
-terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dpush PLam) :: atoms
-
-atomOrClose : DFA q PSz SK
-atomOrClose =
-  spaced $ step ';' (dact onSemi) :: close ')' (dact onClose) :: atoms
-
-types : DFA q PSz SK
-types =
-  spaced $
-       opn "(" (getStack >>= \st => dput PTpe (st:>POpn))
-    :: upperName (dact . onTpe . pvar)
-
-afterType : DFA q PSz SK
-afterType =
-  spaced
-    [ step ')' (dact onClose)
-    , step '.' (dact onDot)
-    , step ';' (dact onSemi)
-    , step' "->" PTpe
-    ]
-
-ptrans : Lex1 q PSz SK
-ptrans =
-  lex1
-    [ entry PIni   $ spaced $ step "%alias" (dact onAlias) :: step "%eval" (dact onEval) :: vars
-    , entry PIniN  $ spaced [step '=' $ dpush0 PApp, step ':' $ dpush0 PTpe]
-    , entry PApp     terms
-    , entry PAppT    atomOrClose
-    , entry PAls   $ spaced $ upperName (dact . onVar)
-    , entry PAlsN  $ spaced [step ':' $ dpush0 PTpe]
-    , entry PLam   $ spaced (step '_' (dact placeholder) :: vars)
-    , entry PLamV  $ spaced [step ':' $ dpush0 PTpe]
-    , entry PTpe     types
-    , entry PTpeT    afterType
-    ]
-
-openParen : Stack b PState st -> Bool
-openParen [<]         = False
-openParen (x :> POpn) = True
-openParen (x :> _)    = openParen x
-openParen (x :< _)    = openParen x
+SK = DStack STATE TpeErr
 
 lamErr : List String -> SK q -> F1 q LamErr
 lamErr ss sk = T1.do
   st <- getStack
-  case openParen st of
-    True  => unclosedIfEOI "(" ss sk
-    False => unexpected ss sk
+  case openBounds st of
+    Just (BB p _) => push1 (positions sk) p >> unclosedIfEOI "(" ss sk
+    _             => unexpected ss sk
 
 perr : Arr32 PSz (SK q -> F1 q LamErr)
-perr =
-  arr32 PSz (lamErr [])
-    [ entry PLamV $ lamErr [":"]
-    , entry PTpe  $ lamErr ["Nat", "Bool", "("]
-    , entry PTpeT $ lamErr ["->", ".", ")"]
+perr = arr32 PSz (lamErr []) []
+
+onerr : STATE st -> SK q => F1 q (Index PSz)
+onerr st @{sk} = T1.do
+ let eo      := at perr (cast st)
+ err <- eo sk
+ failWith err (cast ERR)
+
+%inline
+dtrans : SK q => StateTrans STATE -> F1 q (Index PSz)
+dtrans f t =
+ let (sx:>st) # t := getStack t
+  in case f st sx of
+       _:>ERR     => onerr st t
+       sx@(_:>st) => putStackAs sx (cast st) t
+
+vars : Steps q PSz SK
+vars = varName (dtrans . var)
+
+atoms : Steps q PSz SK
+atoms =
+     step '(' (bounds >>= dtrans . openTerm)
+  :: step "unit" (bounds >>= dtrans . atom . unit)
+  :: bools (\b => bounded' b >>= dtrans . atom . bool)
+  ++ nats  (\b => bounded' b >>= dtrans . atom . int)
+  ++ vars
+
+terms : DFA q PSz SK
+terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dtrans . lambda) :: atoms
+
+atomOrClose : DFA q PSz SK
+atomOrClose =
+  spaced $
+       step ';' (dtrans termSemicolon)
+    :: step ')' (dtrans closeTerm)
+    :: atoms
+
+typeAtoms : DFA q PSz SK
+typeAtoms =
+  spaced $
+       step "(" (bounds >>= dtrans . openType)
+    :: upperName (dtrans . typeAtom . pvar)
+
+afterType : DFA q PSz SK
+afterType =
+  spaced
+    [ step ')' (dtrans closeType)
+    , step '.' (dtrans dot)
+    , step ';' (dtrans typeSemicolon)
+    , step "->" (dtrans arrow)
+    ]
+
+top : DFA q PSz SK
+top =
+  spaced $
+       step "%alias" (dtrans alias)
+    :: step "%eval" (dtrans eval)
+    :: vars
+
+
+ptrans : Lex1 q PSz SK
+ptrans =
+  lex1
+    [ entry TOP            top
+
+    , entry TOP_FUNNAME    $ spaced [step '=' (dtrans eq), step ':' (dtrans colon)]
+    , entry DECL_COLON     typeAtoms
+    , entry DEFN_EQ        terms
+
+    , entry EVAL           terms
+
+    , entry ALIAS          $ spaced $ upperName (dtrans . typename)
+    , entry ALIAS_TYPENAME $ spaced [step ':' (dtrans colon)]
+    , entry ALIAS_COLON    typeAtoms
+
+    , entry LAMBDA         $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LAMBDA_VAR     $ spaced [step ':' (dtrans colon)]
+    , entry LAMBDA_COLON   typeAtoms
+    , entry LAMBDA_DOT     terms
+
+    , entry TERM           atomOrClose
+    , entry TERM_OPEN      terms
+    , entry SEQ            terms
+
+    , entry IF             terms
+    , entry THEN           terms
+    , entry ELSE           terms
+
+    , entry TYPE_SEQ       afterType
+    , entry TYPE_ARROW     typeAtoms
+    , entry TYPE_OPEN      typeAtoms
     ]
 
 peoi : Index PSz -> SK q -> F1 q (Either LamErr $ List Declaration)
 peoi st sk t =
  let sx # t := read1 sk.stack_ t
   in case sx of
-       [<sd]:>PIni => Right (sd <>> []) # t
-       _           => arrFail SK perr st sk t
+       [<sd]:>TOP => Right (sd <>> []) # t
+       _          => arrFail SK perr st sk t
 
 public export
 decls : P1 q LamErr (List Declaration)
-decls = P (cast PIni) (init $ [<[<]]:>PIni) ptrans (\x => (Nothing #)) perr peoi
+decls = P (cast TOP) (init $ [<[<]]:>TOP) ptrans (\x => (Nothing #)) perr peoi
 
 --------------------------------------------------------------------------------
 -- Proofs
 --------------------------------------------------------------------------------
 
-inBoundsPState PIni   = Refl
-inBoundsPState PIniN  = Refl
-inBoundsPState PEval  = Refl
-inBoundsPState PAls   = Refl
-inBoundsPState PAlsN  = Refl
-inBoundsPState PApp   = Refl
-inBoundsPState PAppT  = Refl
-inBoundsPState POpn   = Refl
-inBoundsPState PSeq   = Refl
-inBoundsPState PLam   = Refl
-inBoundsPState PLamV  = Refl
-inBoundsPState PLamT  = Refl
-inBoundsPState PIf    = Refl
-inBoundsPState PThen  = Refl
-inBoundsPState PElse  = Refl
-inBoundsPState PTpe   = Refl
-inBoundsPState PTpeT  = Refl
-inBoundsPState PErr   = Refl
+inBoundsSTATE TOP            = Refl
+inBoundsSTATE TOP_FUNNAME    = Refl
+inBoundsSTATE DECL_COLON     = Refl
+inBoundsSTATE DEFN_EQ        = Refl
+inBoundsSTATE EVAL           = Refl
+inBoundsSTATE ALIAS          = Refl
+inBoundsSTATE ALIAS_TYPENAME = Refl
+inBoundsSTATE ALIAS_COLON    = Refl
+inBoundsSTATE LAMBDA         = Refl
+inBoundsSTATE LAMBDA_VAR     = Refl
+inBoundsSTATE LAMBDA_COLON   = Refl
+inBoundsSTATE LAMBDA_DOT     = Refl
+inBoundsSTATE TERM           = Refl
+inBoundsSTATE TERM_OPEN      = Refl
+inBoundsSTATE SEQ            = Refl
+inBoundsSTATE IF             = Refl
+inBoundsSTATE THEN           = Refl
+inBoundsSTATE ELSE           = Refl
+inBoundsSTATE TYPE           = Refl
+inBoundsSTATE TYPE_SEQ       = Refl
+inBoundsSTATE TYPE_ARROW     = Refl
+inBoundsSTATE TYPE_OPEN      = Refl
+inBoundsSTATE ERR            = Refl

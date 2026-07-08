@@ -16,9 +16,23 @@ export
 identchar : Gen Char
 identchar = frequency [(10,alphaNum),(1, element ['_', '\''])]
 
+notKeyword : String -> VarName
+notKeyword "if" = "if_"
+notKeyword "then" = "then_"
+notKeyword "else" = "else_"
+notKeyword s      = VN s
+
 export
 varname : Gen VarName
-varname = (VN . fastPack) <$> [| alpha :: list (linear 0 6) identchar |]
+varname = (notKeyword . fastPack) <$> [| alpha :: list (linear 0 6) identchar |]
+
+export
+bindname : Gen BindName
+bindname =
+  frequency
+    [ (1, pure PH)
+    , (10, map NM varname)
+    ]
 
 export
 tpename : Gen VarName
@@ -41,9 +55,41 @@ tpe = go 5
     go (S k) = frequency [(1,tpeVar),(2,[| PFun bb (go k) (go k) |])]
 
 export
+prim : Gen Term
+prim =
+  frequency
+    [ (1, pure (TPrim NoBB PUnit))
+    , (1, (TPrim NoBB . PBool) <$> bool)
+    , (3, (TPrim NoBB . PNat) <$> nat (linear 0 100))
+    , (3, TVar NoBB <$> varname)
+    ]
+
+export
+term : Gen Term
+term = go 5
+  where
+    go : Nat -> Gen Term
+    go 0     = prim
+    go (S k) =
+      frequency
+        [ (1, prim)
+        , (2, [| TApp bb (go k) (go k) |])
+        , (2, [| TIf  bb (go k) (go k) (go k) |])
+        , (2, [| TLam  bb bindname tpe (go k) |])
+        ]
+
+export
 aliases : Gen Declaration
 aliases = [| Alias bb tpename tpe |]
 
 export
 decl : Gen Declaration
-decl = [| Decl bb tpename tpe |]
+decl = [| Decl bb varname tpe |]
+
+export
+defn : Gen Declaration
+defn = [| Defn bb varname term |]
+
+export
+eval : Gen Declaration
+eval = [| Eval term |]

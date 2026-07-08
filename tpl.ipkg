@@ -32,6 +32,7 @@ modules    = TPL.BoolExp.Parser
            , TPL.Lambda.Typed.Declaration
            , TPL.Lambda.Typed.Examples
            , TPL.Lambda.Typed.Parser
+           , TPL.Lambda.Typed.Parser.State
            , TPL.Lambda.Typed.Term
            , TPL.Lambda.Typed.TT
            , TPL.Lambda.Typed.Type
