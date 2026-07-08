@@ -50,7 +50,11 @@ dtrans f t =
        sx@(_:>st) => putStackAs sx (cast st) t
 
 vars : Steps q PSz SK
-vars = varName (dtrans . var)
+vars =
+     step "if" (bounds >>= dtrans . if')
+  :: step "then" (dtrans then')
+  :: step "else" (dtrans else')
+  :: varName (dtrans . var)
 
 atoms : Steps q PSz SK
 atoms =
