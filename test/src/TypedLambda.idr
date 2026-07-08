@@ -10,24 +10,28 @@ prop_aliasRoundTrip : Property
 prop_aliasRoundTrip =
   property $ Prelude.do
     d <- forAll aliases
+    footnote "Encoded: \{d}"
     Right [d] === map clearBounds (parseString decls Virtual "\{d}")
 
 prop_declRoundTrip : Property
 prop_declRoundTrip =
   property $ Prelude.do
     d <- forAll decl
+    footnote "Encoded: \{d}"
     Right [d] === map clearBounds (parseString decls Virtual "\{d}")
 
 prop_defnRoundTrip : Property
 prop_defnRoundTrip =
   property $ Prelude.do
     d <- forAll defn
+    footnote "Encoded: \{d}"
     Right [d] === map clearBounds (parseString decls Virtual "\{d}")
 
 prop_evalRoundTrip : Property
 prop_evalRoundTrip =
   property $ Prelude.do
     d <- forAll eval
+    footnote "Encoded: \{d}"
     Right [d] === map clearBounds (parseString decls Virtual "\{d}")
 
 

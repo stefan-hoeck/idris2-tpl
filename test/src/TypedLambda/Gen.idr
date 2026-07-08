@@ -16,9 +16,15 @@ export
 identchar : Gen Char
 identchar = frequency [(10,alphaNum),(1, element ['_', '\''])]
 
+notKeyword : String -> VarName
+notKeyword "if" = "if_"
+notKeyword "then" = "then_"
+notKeyword "else" = "else_"
+notKeyword s      = VN s
+
 export
 varname : Gen VarName
-varname = (VN . fastPack) <$> [| alpha :: list (linear 0 6) identchar |]
+varname = (notKeyword . fastPack) <$> [| alpha :: list (linear 0 6) identchar |]
 
 export
 bindname : Gen BindName

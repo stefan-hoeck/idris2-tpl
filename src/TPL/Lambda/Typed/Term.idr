@@ -82,19 +82,17 @@ export %inline
 unit : ByteBounds -> Term
 unit bb = TPrim bb PUnit
 
-export
-appAll : Term -> List Term -> Term
-appAll s []      = s
-appAll s (t::ts) = appAll (TApp (cast s <+> cast t) s t) ts
+export %inline
+app : Term -> Term -> Term
+app s t = TApp (cast s <+> cast t) s t
 
 export %inline
-appAllSnoc : Term -> SnocList Term -> Term
-appAllSnoc s = appAll s . (<>>[])
+seq : Term -> Term -> Term
+seq s t = TApp NoBB (TLam NoBB PH (PVar NoBB "Unit") t) s
 
 export %inline
-seq : SnocList Term -> Term -> Term
-seq [<]     t = t
-seq (ss:<s) t = seq ss $ TApp NoBB (TLam NoBB PH (PVar NoBB "Unit") t) s
+tif : ByteBounds -> Term -> Term -> Term -> Term
+tif b i t e = TIf (b <+> cast e) i t e
 
 --------------------------------------------------------------------------------
 -- Pretty Printing
