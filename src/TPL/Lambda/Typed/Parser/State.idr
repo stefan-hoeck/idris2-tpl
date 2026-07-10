@@ -36,6 +36,7 @@ data STATE : SnocList Type -> Type where
   LAMBDA_DOT          : STATE [<ByteBounds,BindName,RawTpe]
 
   TERM                : STATE [<Term]
+  APP                 : STATE [<Term,SnocList Term]
   TERM_OPEN           : STATE [<ByteBounds]
   SEQ                 : STATE [<ByteBounds,Term]
 
@@ -79,13 +80,13 @@ err st sx = sx:>st:>ERR
 
 term : Term -> StateTrans STATE
 term x LAMBDA_DOT (sx:>st:<b:<v:<bt) = term (TLam b v bt x) st sx
-term x TERM       (sx:>st:<y)        = term (app y x) st sx
+term x APP        (sx:>st:<y:<ys)    = term (appSnoc y (ys:<x)) st sx
 term x ELSE       (sx:>st:<b:<i:<t)  = term (tif b i t x) st sx
 term x st         sx                 = sx:>st:<x:>TERM
 
 endTerm : StateTrans STATE
-endTerm TERM (sx:>st:<x) = term x st sx
-endTerm st   sx          = err st sx
+endTerm APP (sx:>st:<x:<sy) = term (appSnoc x sy) st sx
+endTerm st   sx              = err st sx
 
 endType : StateTrans STATE
 endType TYPE_SEQ (sx:<ss:<s) = sx:<tpeAppAll ss s:>TYPE
@@ -136,8 +137,8 @@ dot st       sx                        = err st sx
 
 export
 atom : Term -> StateTrans STATE
-atom x TERM (sx:<y) = sx:<app y x:>TERM
-atom x st   sx      = sx:>st:<x:>TERM
+atom x APP (sx:<y) = sx:<(y:<x):>APP
+atom x st  sx      = sx:>st:<x:<[<]:>APP
 
 export
 typeAtom : RawTpe -> StateTrans STATE
@@ -149,7 +150,7 @@ termSemicolon : StateTrans STATE
 termSemicolon st sx =
   case endTerm st sx of
     sy:>TERM_OPEN:<t:>TERM       => sy:<t:>SEQ
-    sy:<s:>SEQ:<t:>TERM          => sy:<(seq s t):>SEQ
+    sy:<s:>SEQ:<t:>TERM          => sy:<seq s t:>SEQ
     sy:<sd:>EVAL:<t:>TERM        => sy:<(sd:<Eval t):>TOP
     sy:<sd:<vn:>DEFN_EQ:<t:>TERM => sy:<(sd:<Defn vn.bounds vn.val t):>TOP
     _                            => err st sx
@@ -210,6 +211,14 @@ openRecord b st sx = sx:>st:<b:<[<]:>RECORD
 export
 openRecordType : ByteBounds -> StateTrans STATE
 openRecordType b st sx = sx:>st:<b:<[<]:>RECORD_TYPE
+
+export
+projection : ByteBounded VarName -> StateTrans STATE
+projection (B v b) APP (sx:<t:<ss) =
+  case ss of
+    ini:<lst => sx:<t:<(ini:<TField (cast lst <+> b) lst v):>APP
+    [<]      => sx:<TField (cast t <+> b) t v:<[<]:>APP
+projection _ st sx = err st sx
 
 export
 closeTerm : StateTrans STATE

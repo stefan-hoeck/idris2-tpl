@@ -33,6 +33,10 @@ ident : RExp True
 ident = alpha >> star identchar
 
 export
+proj : RExp True
+proj = '.' >> ident
+
+export
 uident : RExp True
 uident = upper >> star identchar
 

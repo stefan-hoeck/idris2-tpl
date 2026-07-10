@@ -92,9 +92,14 @@ export %inline
 unit : ByteBounds -> Term
 unit bb = TPrim bb PUnit
 
+export
+appAll : Term -> List Term -> Term
+appAll s [] = s
+appAll s (x::xs) = appAll (TApp (cast s <+> cast x) s x) xs
+
 export %inline
-app : Term -> Term -> Term
-app s t = TApp (cast s <+> cast t) s t
+appSnoc : Term -> SnocList Term -> Term
+appSnoc s = appAll s . (<>> [])
 
 export %inline
 seq : Term -> Term -> Term
