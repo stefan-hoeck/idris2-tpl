@@ -10,7 +10,11 @@ import public TPL.Lambda.Typed.Declaration
 
 public export
 0 RecField : Type
-RecField = (VarName,RawTpe)
+RecField = (VarName,Term)
+
+public export
+0 RecTypeField : Type
+RecTypeField = (VarName,RawTpe)
 
 public export
 data STATE : SnocList Type -> Type where
@@ -35,6 +39,11 @@ data STATE : SnocList Type -> Type where
   TERM_OPEN           : STATE [<ByteBounds]
   SEQ                 : STATE [<ByteBounds,Term]
 
+  RECORD              : STATE [<ByteBounds,SnocList RecField]
+  RECORD_FIELD        : STATE [<ByteBounds,SnocList RecField,VarName]
+  RECORD_EQ           : STATE [<ByteBounds,SnocList RecField,VarName]
+  RECORD_COMMA        : STATE [<ByteBounds,SnocList RecField]
+
   IF                  : STATE [<ByteBounds]
   THEN                : STATE [<ByteBounds,Term]
   ELSE                : STATE [<ByteBounds,Term,Term]
@@ -43,10 +52,10 @@ data STATE : SnocList Type -> Type where
   TYPE_SEQ            : STATE [<SnocList RawTpe, RawTpe]
   TYPE_ARROW          : STATE [<SnocList RawTpe, RawTpe]
   TYPE_OPEN           : STATE [<ByteBounds]
-  RECORD_TYPE         : STATE [<ByteBounds,SnocList RecField]
-  RECORD_TYPE_FIELD   : STATE [<ByteBounds,SnocList RecField,VarName]
-  RECORD_TYPE_COLON   : STATE [<ByteBounds,SnocList RecField,VarName]
-  RECORD_TYPE_COMMA   : STATE [<ByteBounds,SnocList RecField]
+  RECORD_TYPE         : STATE [<ByteBounds,SnocList RecTypeField]
+  RECORD_TYPE_FIELD   : STATE [<ByteBounds,SnocList RecTypeField,VarName]
+  RECORD_TYPE_COLON   : STATE [<ByteBounds,SnocList RecTypeField,VarName]
+  RECORD_TYPE_COMMA   : STATE [<ByteBounds,SnocList RecTypeField]
 
   ERR                 : STATE [<]
 
@@ -112,8 +121,9 @@ colon st                sx = err st sx
 
 export
 eq : StateTrans STATE
-eq TOP_FUNNAME sx = sx:>DEFN_EQ
-eq st          sx = err st sx
+eq TOP_FUNNAME  sx = sx:>DEFN_EQ
+eq RECORD_FIELD sx = sx:>RECORD_EQ
+eq st           sx = err st sx
 
 export
 lambda : ByteBounds -> StateTrans STATE
@@ -174,6 +184,8 @@ export
 var : ByteBounded VarName -> StateTrans STATE
 var v LAMBDA             sx = sx:<NM v.val:>LAMBDA_VAR
 var v TOP                sx = sx:<v:>TOP_FUNNAME
+var v RECORD             sx = sx:<v.val:>RECORD_FIELD
+var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
 var v RECORD_TYPE        sx = sx:<v.val:>RECORD_TYPE_FIELD
 var v RECORD_TYPE_COMMA  sx = sx:<v.val:>RECORD_TYPE_FIELD
 var v st                 sx = atom (TVar v.bounds v.val) st sx
@@ -192,6 +204,10 @@ openType : ByteBounds -> StateTrans STATE
 openType b st sx = sx:>st:<b:>TYPE_OPEN
 
 export
+openRecord : ByteBounds -> StateTrans STATE
+openRecord b st sx = sx:>st:<b:<[<]:>RECORD
+
+export
 openRecordType : ByteBounds -> StateTrans STATE
 openRecordType b st sx = sx:>st:<b:<[<]:>RECORD_TYPE
 
@@ -201,6 +217,27 @@ closeTerm st sx =
   case endTerm st sx of
     sx:>st:<_:<s:>SEQ:<t:>TERM => atom (seq s t) st sx
     sx:>st:<_:>TERM_OPEN:<t:>TERM => atom t st sx
+    _ => err st sx
+
+export
+endRecordField : StateTrans STATE
+endRecordField st sx =
+  case endTerm st sx of
+    sx:<sp:<v:>RECORD_EQ:<t:>TERM => sx:<(sp:<(v,t)):>RECORD
+    _ => err st sx
+
+export
+recordComma : StateTrans STATE
+recordComma st sx =
+  case endRecordField st sx of
+    sx:>RECORD => sx:>RECORD_COMMA
+    _ => err st sx
+
+export
+closeRecord : ByteBounds -> StateTrans STATE
+closeRecord b2 st sx =
+  case endRecordField st sx of
+    sx:>st:<b:<sp:>RECORD => atom (TRec (b<+>b2) (sp<>>[])) st sx
     _ => err st sx
 
 export

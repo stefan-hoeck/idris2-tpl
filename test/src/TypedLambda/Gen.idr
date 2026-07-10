@@ -78,6 +78,10 @@ term : Gen Term
 term = go 5
   where
     go : Nat -> Gen Term
+
+    rec : Nat -> Gen Term
+    rec k = TRec NoBB <$> list (linear 1 5) [| (varname, go k) |]
+
     go 0     = prim
     go (S k) =
       frequency
@@ -85,6 +89,7 @@ term = go 5
         , (2, [| TApp bb (go k) (go k) |])
         , (2, [| TIf  bb (go k) (go k) (go k) |])
         , (2, [| TLam  bb bindname tpe (go k) |])
+        , (2, rec k)
         ]
 
 export

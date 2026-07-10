@@ -59,6 +59,7 @@ vars =
 atoms : Steps q PSz SK
 atoms =
      step '(' (bounds >>= dtrans . openTerm)
+  :: step '<' (bounds >>= dtrans . openRecord)
   :: step "unit" (bounds >>= dtrans . atom . unit)
   :: bools (\b => bounded' b >>= dtrans . atom . bool)
   ++ nats  (\b => bounded' b >>= dtrans . atom . int)
@@ -72,6 +73,8 @@ atomOrClose =
   spaced $
        step ';' (dtrans termSemicolon)
     :: step ')' (dtrans closeTerm)
+    :: step '>' (bounds >>= dtrans . closeRecord)
+    :: step ',' (dtrans recordComma)
     :: atoms
 
 typeAtoms : DFA q PSz SK
@@ -128,6 +131,11 @@ ptrans =
     , entry THEN              terms
     , entry ELSE              terms
 
+    , entry RECORD            $ spaced vars
+    , entry RECORD_FIELD      $ spaced [step '=' (dtrans eq)]
+    , entry RECORD_COMMA      $ spaced vars
+    , entry RECORD_EQ         terms
+
     , entry TYPE_SEQ          afterType
     , entry TYPE_ARROW        typeAtoms
     , entry TYPE_OPEN         typeAtoms
@@ -170,6 +178,10 @@ inBoundsSTATE SEQ               = Refl
 inBoundsSTATE IF                = Refl
 inBoundsSTATE THEN              = Refl
 inBoundsSTATE ELSE              = Refl
+inBoundsSTATE RECORD            = Refl
+inBoundsSTATE RECORD_FIELD      = Refl
+inBoundsSTATE RECORD_EQ         = Refl
+inBoundsSTATE RECORD_COMMA      = Refl
 inBoundsSTATE TYPE              = Refl
 inBoundsSTATE TYPE_SEQ          = Refl
 inBoundsSTATE TYPE_ARROW        = Refl
