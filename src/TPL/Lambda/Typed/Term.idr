@@ -27,6 +27,9 @@ data Term : Type where
   ||| Variables
   TVar   : ByteBounds -> (v : VarName) -> Term
 
+  ||| Record field projection
+  TField : ByteBounds -> Term -> (v : VarName) -> Term
+
   ||| Abstraction: A bound variable, its type, and its scope
   TLam   : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (sc : Term) -> Term
 
@@ -55,6 +58,7 @@ FromString Term where fromString = TVar NoBB . fromString
 export
 Cast Term ByteBounds where
   cast (TVar x _)     = x
+  cast (TField x _ _) = x
   cast (TLam x _ _ _) = x
   cast (TApp x _ _)   = x
   cast (TPrim x _)    = x
@@ -64,6 +68,7 @@ Cast Term ByteBounds where
 export
 MapBounds Term where
   mapBounds f (TVar x v)      = TVar (f x) v
+  mapBounds f (TField x t v)  = TField (f x) (mapBounds f t) v
   mapBounds f (TLam x v t sc) = TLam (f x) v (mapBounds f t) (mapBounds f sc)
   mapBounds f (TApp x t s)    = TApp (f x) (mapBounds f t) (mapBounds f s)
   mapBounds f (TPrim x y)     = TPrim (f x) y
@@ -104,10 +109,11 @@ tif b i t e = TIf (b <+> cast e) i t e
 --------------------------------------------------------------------------------
 
 isAtom : Term -> Bool
-isAtom (TVar {})  = True
-isAtom (TPrim {}) = True
-isAtom (TRec {})  = True
-isAtom _          = False
+isAtom (TVar {})   = True
+isAtom (TField {}) = True
+isAtom (TPrim {})  = True
+isAtom (TRec {})   = True
+isAtom _           = False
 
 appL : Term -> String
 
@@ -117,6 +123,7 @@ prettyFields : SnocList String -> List (VarName,Term) -> String
 
 pretty : Term -> String
 pretty (TVar _ v)      = v.name
+pretty (TField _ t v)  = "\{paren t}.\{v}"
 pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
