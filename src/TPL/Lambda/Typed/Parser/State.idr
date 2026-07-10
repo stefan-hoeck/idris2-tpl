@@ -9,38 +9,46 @@ import public TPL.Lambda.Typed.Declaration
 %language ElabReflection
 
 public export
+0 RecField : Type
+RecField = (VarName,RawTpe)
+
+public export
 data STATE : SnocList Type -> Type where
-  TOP              : STATE [<SnocList Declaration]
+  TOP                 : STATE [<SnocList Declaration]
 
-  TOP_FUNNAME      : STATE [<SnocList Declaration,ByteBounded VarName]
-  DECL_COLON       : STATE [<SnocList Declaration,ByteBounded VarName]
-  DEFN_EQ          : STATE [<SnocList Declaration,ByteBounded VarName]
+  TOP_FUNNAME         : STATE [<SnocList Declaration,ByteBounded VarName]
+  DECL_COLON          : STATE [<SnocList Declaration,ByteBounded VarName]
+  DEFN_EQ             : STATE [<SnocList Declaration,ByteBounded VarName]
 
-  EVAL             : STATE [<SnocList Declaration]
+  EVAL                : STATE [<SnocList Declaration]
 
-  ALIAS            : STATE [<SnocList Declaration]
-  ALIAS_TYPENAME   : STATE [<SnocList Declaration,ByteBounded VarName]
-  ALIAS_COLON      : STATE [<SnocList Declaration,ByteBounded VarName]
+  ALIAS               : STATE [<SnocList Declaration]
+  ALIAS_TYPENAME      : STATE [<SnocList Declaration,ByteBounded VarName]
+  ALIAS_COLON         : STATE [<SnocList Declaration,ByteBounded VarName]
 
-  LAMBDA           : STATE [<ByteBounds]
-  LAMBDA_VAR       : STATE [<ByteBounds,BindName]
-  LAMBDA_COLON     : STATE [<ByteBounds,BindName]
-  LAMBDA_DOT       : STATE [<ByteBounds,BindName,RawTpe]
+  LAMBDA              : STATE [<ByteBounds]
+  LAMBDA_VAR          : STATE [<ByteBounds,BindName]
+  LAMBDA_COLON        : STATE [<ByteBounds,BindName]
+  LAMBDA_DOT          : STATE [<ByteBounds,BindName,RawTpe]
 
-  TERM             : STATE [<Term]
-  TERM_OPEN        : STATE [<ByteBounds]
-  SEQ              : STATE [<ByteBounds,Term]
+  TERM                : STATE [<Term]
+  TERM_OPEN           : STATE [<ByteBounds]
+  SEQ                 : STATE [<ByteBounds,Term]
 
-  IF               : STATE [<ByteBounds]
-  THEN             : STATE [<ByteBounds,Term]
-  ELSE             : STATE [<ByteBounds,Term,Term]
+  IF                  : STATE [<ByteBounds]
+  THEN                : STATE [<ByteBounds,Term]
+  ELSE                : STATE [<ByteBounds,Term,Term]
 
-  TYPE             : STATE [<RawTpe]
-  TYPE_SEQ         : STATE [<SnocList RawTpe, RawTpe]
-  TYPE_ARROW       : STATE [<SnocList RawTpe, RawTpe]
-  TYPE_OPEN        : STATE [<ByteBounds]
+  TYPE                : STATE [<RawTpe]
+  TYPE_SEQ            : STATE [<SnocList RawTpe, RawTpe]
+  TYPE_ARROW          : STATE [<SnocList RawTpe, RawTpe]
+  TYPE_OPEN           : STATE [<ByteBounds]
+  RECORD_TYPE         : STATE [<ByteBounds,SnocList RecField]
+  RECORD_TYPE_FIELD   : STATE [<ByteBounds,SnocList RecField,VarName]
+  RECORD_TYPE_COLON   : STATE [<ByteBounds,SnocList RecField,VarName]
+  RECORD_TYPE_COMMA   : STATE [<ByteBounds,SnocList RecField]
 
-  ERR              : STATE [<]
+  ERR                 : STATE [<]
 
 %runElab deriveIndexed "STATE" [Show,ConIndex]
 
@@ -96,10 +104,11 @@ typename _ st    sx = err st sx
 
 export
 colon : StateTrans STATE
-colon LAMBDA_VAR     sx = sx:>LAMBDA_COLON
-colon TOP_FUNNAME    sx = sx:>DECL_COLON
-colon ALIAS_TYPENAME sx = sx:>ALIAS_COLON
-colon st             sx = err st sx
+colon LAMBDA_VAR        sx = sx:>LAMBDA_COLON
+colon TOP_FUNNAME       sx = sx:>DECL_COLON
+colon ALIAS_TYPENAME    sx = sx:>ALIAS_COLON
+colon RECORD_TYPE_FIELD sx = sx:>RECORD_TYPE_COLON
+colon st                sx = err st sx
 
 export
 eq : StateTrans STATE
@@ -163,9 +172,11 @@ else' st sx =
 
 export
 var : ByteBounded VarName -> StateTrans STATE
-var v LAMBDA sx = sx:<NM v.val:>LAMBDA_VAR
-var v TOP    sx = sx:<v:>TOP_FUNNAME
-var v st     sx = atom (TVar v.bounds v.val) st sx
+var v LAMBDA             sx = sx:<NM v.val:>LAMBDA_VAR
+var v TOP                sx = sx:<v:>TOP_FUNNAME
+var v RECORD_TYPE        sx = sx:<v.val:>RECORD_TYPE_FIELD
+var v RECORD_TYPE_COMMA  sx = sx:<v.val:>RECORD_TYPE_FIELD
+var v st                 sx = atom (TVar v.bounds v.val) st sx
 
 export
 placeholder : StateTrans STATE
@@ -181,6 +192,10 @@ openType : ByteBounds -> StateTrans STATE
 openType b st sx = sx:>st:<b:>TYPE_OPEN
 
 export
+openRecordType : ByteBounds -> StateTrans STATE
+openRecordType b st sx = sx:>st:<b:<[<]:>RECORD_TYPE
+
+export
 closeTerm : StateTrans STATE
 closeTerm st sx =
   case endTerm st sx of
@@ -193,6 +208,27 @@ closeType : StateTrans STATE
 closeType st sx =
   case endType st sx of
     sx:>st:<b:>TYPE_OPEN:<t:>TYPE => typeAtom t st sx
+    _ => err st sx
+
+export
+endRecordTypeField : StateTrans STATE
+endRecordTypeField st sx =
+  case endType st sx of
+    sx:<sp:<v:>RECORD_TYPE_COLON:<t:>TYPE => sx:<(sp:<(v,t)):>RECORD_TYPE
+    _ => err st sx
+
+export
+recordTypeComma : StateTrans STATE
+recordTypeComma st sx =
+  case endRecordTypeField st sx of
+    sx:>RECORD_TYPE => sx:>RECORD_TYPE_COMMA
+    _ => err st sx
+
+export
+closeRecordType : ByteBounds -> StateTrans STATE
+closeRecordType b2 st sx =
+  case endRecordTypeField st sx of
+    sx:>st:<b:<sp:>RECORD_TYPE => typeAtom (PRec (b<+>b2) (sp<>>[])) st sx
     _ => err st sx
 
 export
