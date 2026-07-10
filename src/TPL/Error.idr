@@ -81,7 +81,7 @@ typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
 export
 Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrUnify e f)    = typeMsg e f
-  interpolate (ErrNotField v t) = "\{v} is not a record field of \{t}"
+  interpolate (ErrNotField v t) = "'\{v}' is not a record field of \{t}"
   interpolate (ErrFun f)        = typeMsg "a function type" f
   interpolate (ErrUnexpFun e)   = typeMsg e "a function type"
   interpolate (ErrArg e f)      = typeMsg "\{e} -> _" "\{f} -> _"
