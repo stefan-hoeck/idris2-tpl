@@ -36,6 +36,9 @@ data Term : Type where
   ||| Primitive values
   TPrim  : ByteBounds -> Prim -> Term
 
+  ||| record constructor
+  TRec   : ByteBounds -> List (VarName, Term) -> Term
+
   ||| `if ... then ... else` function. Eventually, this could be
   ||| desugared into a pattern match on bools.
   TIf    : ByteBounds -> (i,t,e : Term) -> Term
@@ -55,6 +58,7 @@ Cast Term ByteBounds where
   cast (TLam x _ _ _) = x
   cast (TApp x _ _)   = x
   cast (TPrim x _)    = x
+  cast (TRec x _)     = x
   cast (TIf x _ _ _)  = x
 
 export
@@ -63,6 +67,7 @@ MapBounds Term where
   mapBounds f (TLam x v t sc) = TLam (f x) v (mapBounds f t) (mapBounds f sc)
   mapBounds f (TApp x t s)    = TApp (f x) (mapBounds f t) (mapBounds f s)
   mapBounds f (TPrim x y)     = TPrim (f x) y
+  mapBounds f (TRec x y)      = assert_total $ TRec (f x) (map (mapBounds f) <$> y)
   mapBounds f (TIf x i t e)   =
     TIf (f x) (mapBounds f i) (mapBounds f t) (mapBounds f e)
 
@@ -101,20 +106,27 @@ tif b i t e = TIf (b <+> cast e) i t e
 isAtom : Term -> Bool
 isAtom (TVar {})  = True
 isAtom (TPrim {}) = True
+isAtom (TRec {})  = True
 isAtom _          = False
 
 appL : Term -> String
 
 paren : Term -> String
 
+prettyFields : SnocList String -> List (VarName,Term) -> String
+
 pretty : Term -> String
 pretty (TVar _ v)      = v.name
 pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
+pretty (TRec _ p)      = "<\{prettyFields [<] p}>"
 pretty (TIf _ i t e)   = "if \{pretty i} then \{pretty t} else \{pretty e}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"
+
+prettyFields ss []          = fastConcat $ intersperse "=" (ss <>> [])
+prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}:\{pretty t}") ps
 
 appL (TApp _ t s) = "\{appL t} \{paren s}"
 appL t            = paren t

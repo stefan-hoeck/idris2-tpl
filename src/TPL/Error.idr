@@ -9,16 +9,17 @@ import public Text.ByteBounds
 
 public export
 data TplErr : Type -> Type where
-  ErrUnify    : (exp, found : t) -> TplErr t
-  ErrFun      : (found : t) -> TplErr t
-  ErrUnexpFun : (exp : t) -> TplErr t
-  ErrArg      : (exp, found : t) -> TplErr t
-  ErrRes      : (exp, found : t) -> TplErr t
-  ErrInfer    : (n : BindName) -> TplErr t
-  ErrBind     : (n : VarName) -> TplErr t
-  ErrDefined  : (n : VarName) -> TplErr t
-  ErrUndef    : (n : VarName) -> TplErr t
-  ErrUnknown  : (n : VarName) -> TplErr t
+  ErrUnify          : (exp, found : t) -> TplErr t
+  ErrFun            : (found : t) -> TplErr t
+  ErrUnexpFun       : (exp : t) -> TplErr t
+  ErrArg            : (exp, found : t) -> TplErr t
+  ErrRes            : (exp, found : t) -> TplErr t
+  ErrInfer          : (n : BindName) -> TplErr t
+  ErrBind           : (n : VarName) -> TplErr t
+  ErrDefined        : (n : VarName) -> TplErr t
+  ErrUndef          : (n : VarName) -> TplErr t
+  ErrUnknown        : (n : VarName) -> TplErr t
+  ErrUnsupported    : TplErr t
 
 %runElab derive "TplErr" [Show,Eq]
 
@@ -65,6 +66,10 @@ parameters {0 trm    : Type}
   unknown : trm -> VarName -> Either (BBErr $ TplErr t) a
   unknown t v = Left $ B (Custom $ ErrUnknown v) (cast t)
 
+  export
+  unsupported : trm -> Either (BBErr $ TplErr t) a
+  unsupported t = Left $ B (Custom ErrUnsupported) (cast t)
+
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
 typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
 
@@ -80,3 +85,4 @@ Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrDefined v)  = "Function already defined: '\{v}'"
   interpolate (ErrUnknown v)  = "Unknown name: '\{v}'"
   interpolate (ErrUndef v)    = "Missing function definition for '\{v}'"
+  interpolate ErrUnsupported  = "Feature not implemened yet"
