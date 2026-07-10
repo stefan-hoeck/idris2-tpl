@@ -89,6 +89,7 @@ term = go 5
         , (2, [| TApp bb (go k) (go k) |])
         , (2, [| TIf  bb (go k) (go k) (go k) |])
         , (2, [| TLam  bb bindname tpe (go k) |])
+        , (2, [| TField  bb (go k) varname |])
         , (2, rec k)
         ]
 

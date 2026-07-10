@@ -68,6 +68,9 @@ atoms =
 terms : DFA q PSz SK
 terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dtrans . lambda) :: atoms
 
+field : ByteString -> VarName
+field bs = VN (toString $ drop 1 bs)
+
 atomOrClose : DFA q PSz SK
 atomOrClose =
   spaced $
@@ -75,6 +78,7 @@ atomOrClose =
     :: step ')' (dtrans closeTerm)
     :: step '>' (bounds >>= dtrans . closeRecord)
     :: step ',' (dtrans recordComma)
+    :: bytes proj (\b => bounded' (field b) >>= dtrans . projection)
     :: atoms
 
 typeAtoms : DFA q PSz SK
@@ -123,7 +127,7 @@ ptrans =
     , entry LAMBDA_COLON      typeAtoms
     , entry LAMBDA_DOT        terms
 
-    , entry TERM              atomOrClose
+    , entry APP               atomOrClose
     , entry TERM_OPEN         terms
     , entry SEQ               terms
 
@@ -173,6 +177,7 @@ inBoundsSTATE LAMBDA_VAR        = Refl
 inBoundsSTATE LAMBDA_COLON      = Refl
 inBoundsSTATE LAMBDA_DOT        = Refl
 inBoundsSTATE TERM              = Refl
+inBoundsSTATE APP               = Refl
 inBoundsSTATE TERM_OPEN         = Refl
 inBoundsSTATE SEQ               = Refl
 inBoundsSTATE IF                = Refl
