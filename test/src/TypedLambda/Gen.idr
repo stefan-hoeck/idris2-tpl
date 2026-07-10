@@ -13,6 +13,10 @@ bb : Gen ByteBounds
 bb = pure NoBB
 
 export
+bounded : Gen a -> Gen (ByteBounded a)
+bounded = map pure
+
+export
 identchar : Gen Char
 identchar = frequency [(10,alphaNum),(1, element ['_', '\''])]
 
@@ -89,7 +93,7 @@ term = go 5
         , (2, [| TApp bb (go k) (go k) |])
         , (2, [| TIf  bb (go k) (go k) (go k) |])
         , (2, [| TLam  bb bindname tpe (go k) |])
-        , (2, [| TField  bb (go k) varname |])
+        , (2, [| TField  bb (go k) (bounded varname) |])
         , (2, rec k)
         ]
 
