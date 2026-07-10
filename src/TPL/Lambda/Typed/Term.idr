@@ -125,8 +125,8 @@ pretty (TIf _ i t e)   = "if \{pretty i} then \{pretty t} else \{pretty e}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"
 
-prettyFields ss []          = fastConcat $ intersperse "=" (ss <>> [])
-prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}:\{pretty t}") ps
+prettyFields ss []          = fastConcat $ intersperse "," (ss <>> [])
+prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}=\{pretty t}") ps
 
 appL (TApp _ t s) = "\{appL t} \{paren s}"
 appL t            = paren t
