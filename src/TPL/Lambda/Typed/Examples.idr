@@ -107,6 +107,7 @@ example =
       );
 
   %alias BoolNat : <bool: Bool, nat: Nat>;
+  %alias Complex : <fst: Nat, snd: BoolNat>;
 
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
@@ -115,7 +116,7 @@ example =
   %eval times 100 200;
   %eval factorial (plus 2 3);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
-  %eval (λx: BoolNat . x) <bool = iszero 3, nat = factorial 4>;
+  %eval (λx: Complex . <fact = x.snd.nat, strict = x.snd.bool>) <fst = 0, snd = <bool = iszero 3, nat = factorial 4>>;
   """
 
 covering
