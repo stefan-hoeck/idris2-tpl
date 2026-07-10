@@ -179,11 +179,15 @@ parameters (env : Env Entry)
 
   typecheckAs t (TPrim b y)    = check t b (SPrim b y)
 
+  typecheckAs t (TRec b y)     = unsupported b
+
   typecheckAs t (TIf b i y e)  = Prelude.do
     si <- typecheckAs TBool i
     sy <- typecheckAs t y
     se <- typecheckAs t e
     Right (SIf b si sy se)
+
+
 
   typecheck (TVar b v)     =
     case findNVar ((NM v ==) . name) sc of
@@ -209,6 +213,8 @@ parameters (env : Env Entry)
     Right (rt ** SApp b sfun sarg)
 
   typecheck (TPrim b y)    = Right (_ ** SPrim b y)
+
+  typecheck (TRec b y)     = unsupported b
 
   typecheck (TIf b i y e)  = Prelude.do
     si        <- typecheckAs TBool i
