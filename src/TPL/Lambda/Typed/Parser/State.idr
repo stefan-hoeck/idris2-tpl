@@ -214,10 +214,10 @@ openRecordType b st sx = sx:>st:<b:<[<]:>RECORD_TYPE
 
 export
 projection : ByteBounded VarName -> StateTrans STATE
-projection (B v b) APP (sx:<t:<ss) =
+projection b APP (sx:<t:<ss) =
   case ss of
-    ini:<lst => sx:<t:<(ini:<TField (cast lst <+> b) lst v):>APP
-    [<]      => sx:<TField (cast t <+> b) t v:<[<]:>APP
+    i:<l => sx:<t:<(i:<TField (cast l <+> b.bounds) l b):>APP
+    [<]  => sx:<TField (cast t <+> b.bounds) t b:<[<]:>APP
 projection _ st sx = err st sx
 
 export

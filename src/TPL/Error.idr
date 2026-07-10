@@ -71,9 +71,9 @@ parameters {0 trm    : Type}
   unsupported : trm -> Either (BBErr $ TplErr t) a
   unsupported t = Left $ B (Custom ErrUnsupported) (cast t)
 
-  export
-  notField : trm -> VarName -> t -> Either (BBErr $ TplErr t) a
-  notField t v rec =  Left $ B (Custom $ ErrNotField v rec) (cast t)
+export
+notField : ByteBounded VarName -> t -> Either (BBErr $ TplErr t) a
+notField (B v b) rec =  Left $ B (Custom $ ErrNotField v rec) b
 
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
 typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
@@ -81,7 +81,7 @@ typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
 export
 Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrUnify e f)    = typeMsg e f
-  interpolate (ErrNotField v t) = "\{v} is not a record field of \{t}"
+  interpolate (ErrNotField v t) = "'\{v}' is not a record field of \{t}"
   interpolate (ErrFun f)        = typeMsg "a function type" f
   interpolate (ErrUnexpFun e)   = typeMsg e "a function type"
   interpolate (ErrArg e f)      = typeMsg "\{e} -> _" "\{f} -> _"

@@ -28,8 +28,8 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
   SVar   : {n : _} -> {t : _} -> ByteBounds -> NVar (V (NM n) t) sc -> STerm t sc
   SField :
        ByteBounds
-    -> (v : VarName)
-    -> IsField v ps t
+    -> (v : ByteBounded VarName)
+    -> IsField v.val ps t
     -> STerm (TRec ps) sc
     -> STerm t sc
   SLam   :
@@ -220,10 +220,10 @@ parameters (env : Env Entry)
         _               => bindErr b v
 
   typecheckAs t (TField b x v) = Prelude.do
-    (TRec ps ** x2) <- typecheck x | (t ** _) => notField b v t
-    case isField v ps of
+    (TRec ps ** x2) <- typecheck x | (t ** _) => notField v t
+    case isField v.val ps of
       Just (s ** prf) => check t b (SField b v prf x2)
-      Nothing         => notField b v (TRec ps)
+      Nothing         => notField v (TRec ps)
 
   typecheckAs t (TLam b v rt scope)   = Prelude.do
     tpe <- resolveTpe rt
@@ -264,10 +264,10 @@ parameters (env : Env Entry)
         _               => bindErr b v
 
   typecheck (TField b x v) = Prelude.do
-    (TRec ps ** x2) <- typecheck x | (t ** _) => notField b v t
-    case isField v ps of
+    (TRec ps ** x2) <- typecheck x | (t ** _) => notField v t
+    case isField v.val ps of
       Just (t ** prf) => Right (t ** SField b v prf x2)
-      Nothing         => notField b v (TRec ps)
+      Nothing         => notField v (TRec ps)
 
   typecheck (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
     (TFun s t ** sarg) <- typecheck arg | (t ** _) => funErr arg t
@@ -423,7 +423,7 @@ toTerm : Value t sc -> STerm t sc
 toTerm (VPrim p)     = SPrim NoBB p
 toTerm (VRec r)      = SRec NoBB (torec r)
 toTerm (VLam v t sc) = SLam NoBB v t sc
-toTerm (VFld v p t)  = SField NoBB v p (toTerm t)
+toTerm (VFld v p t)  = SField NoBB (pure v) p (toTerm t)
 
 torec []          = []
 torec ((v,t)::ps) = (v,toTerm t) :: torec ps

@@ -28,7 +28,7 @@ data Term : Type where
   TVar   : ByteBounds -> (v : VarName) -> Term
 
   ||| Record field projection
-  TField : ByteBounds -> Term -> (v : VarName) -> Term
+  TField : ByteBounds -> Term -> ByteBounded VarName -> Term
 
   ||| Abstraction: A bound variable, its type, and its scope
   TLam   : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (sc : Term) -> Term
@@ -68,7 +68,7 @@ Cast Term ByteBounds where
 export
 MapBounds Term where
   mapBounds f (TVar x v)      = TVar (f x) v
-  mapBounds f (TField x t v)  = TField (f x) (mapBounds f t) v
+  mapBounds f (TField x t v)  = TField (f x) (mapBounds f t) (mapBounds f v)
   mapBounds f (TLam x v t sc) = TLam (f x) v (mapBounds f t) (mapBounds f sc)
   mapBounds f (TApp x t s)    = TApp (f x) (mapBounds f t) (mapBounds f s)
   mapBounds f (TPrim x y)     = TPrim (f x) y
@@ -128,7 +128,7 @@ prettyFields : SnocList String -> List (VarName,Term) -> String
 
 pretty : Term -> String
 pretty (TVar _ v)      = v.name
-pretty (TField _ t v)  = "\{paren t}.\{v}"
+pretty (TField _ t v)  = "\{paren t}.\{v.val}"
 pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
