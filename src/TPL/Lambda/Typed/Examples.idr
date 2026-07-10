@@ -106,6 +106,8 @@ example =
       . if iszero n then 1 else times n (rec (pred n))
       );
 
+  %alias BoolNat : <bool: Bool, nat: Nat>;
+
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
   %eval c2 succ 4;
@@ -113,6 +115,7 @@ example =
   %eval times 100 200;
   %eval factorial (plus 2 3);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
+  %eval (λx: BoolNat . x) <bool = iszero 3, nat = factorial 4>;
   """
 
 covering
