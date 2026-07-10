@@ -117,7 +117,7 @@ example =
   %eval factorial (plus 2 3);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
   %eval
-    (λx: Complex . <fact = x.snd.nut, strict = x.snd.bool>)
+    (λx: Complex . <fact = x.snd.nat, strict = x.snd.bool>)
       < fst = 0
       , snd =
           < bool = iszero 3
