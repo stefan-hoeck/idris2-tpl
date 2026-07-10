@@ -53,6 +53,19 @@ data Tpe : Type where
 %runElab derive "Tpe" [Show,Eq]
 
 public export
+data IsField : VarName -> List (VarName,Tpe) -> Tpe -> Type where
+  IFZ : IsField v ((v,t)::ps) t
+  IFS : IsField v ps t -> IsField v (p::ps) t
+
+export
+isField : (v : VarName) -> (ps : List (VarName,Tpe)) -> Maybe (t ** IsField v ps t)
+isField v []            = Nothing
+isField v ((w,x) :: xs) =
+  case hdecEq v w of
+    Just0 p  => Just (x ** rewrite p in IFZ)
+    Nothing0 => (\(t ** prf) => (t ** IFS prf)) <$> isField v xs
+
+public export
 0 TpeErr : Type
 TpeErr = TplErr Tpe
 

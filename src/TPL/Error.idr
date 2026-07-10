@@ -10,6 +10,7 @@ import public Text.ByteBounds
 public export
 data TplErr : Type -> Type where
   ErrUnify          : (exp, found : t) -> TplErr t
+  ErrNotField       : VarName -> t -> TplErr t
   ErrFun            : (found : t) -> TplErr t
   ErrUnexpFun       : (exp : t) -> TplErr t
   ErrArg            : (exp, found : t) -> TplErr t
@@ -70,19 +71,24 @@ parameters {0 trm    : Type}
   unsupported : trm -> Either (BBErr $ TplErr t) a
   unsupported t = Left $ B (Custom ErrUnsupported) (cast t)
 
+  export
+  notField : trm -> VarName -> t -> Either (BBErr $ TplErr t) a
+  notField t v rec =  Left $ B (Custom $ ErrNotField v rec) (cast t)
+
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
 typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
 
 export
 Interpolation t => Interpolation (TplErr t) where
-  interpolate (ErrUnify e f)  = typeMsg e f
-  interpolate (ErrFun f)      = typeMsg "a function type" f
-  interpolate (ErrUnexpFun e) = typeMsg e "a function type"
-  interpolate (ErrArg e f)    = typeMsg "\{e} -> _" "\{f} -> _"
-  interpolate (ErrRes e f)    = typeMsg "_ -> \{e}" "_ -> \{f}"
-  interpolate (ErrInfer v)    = "Can't infer type for '\{v}'"
-  interpolate (ErrBind v)     = "Unknown variable: '\{v}'"
-  interpolate (ErrDefined v)  = "Function already defined: '\{v}'"
-  interpolate (ErrUnknown v)  = "Unknown name: '\{v}'"
-  interpolate (ErrUndef v)    = "Missing function definition for '\{v}'"
+  interpolate (ErrUnify e f)    = typeMsg e f
+  interpolate (ErrNotField v t) = "\{v} is not a record field of \{t}"
+  interpolate (ErrFun f)        = typeMsg "a function type" f
+  interpolate (ErrUnexpFun e)   = typeMsg e "a function type"
+  interpolate (ErrArg e f)      = typeMsg "\{e} -> _" "\{f} -> _"
+  interpolate (ErrRes e f)      = typeMsg "_ -> \{e}" "_ -> \{f}"
+  interpolate (ErrInfer v)      = "Can't infer type for '\{v}'"
+  interpolate (ErrBind v)       = "Unknown variable: '\{v}'"
+  interpolate (ErrDefined v)    = "Function already defined: '\{v}'"
+  interpolate (ErrUnknown v)    = "Unknown name: '\{v}'"
+  interpolate (ErrUndef v)      = "Missing function definition for '\{v}'"
   interpolate ErrUnsupported  = "Feature not implemened yet"

@@ -26,6 +26,12 @@ data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type
 public export
 data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
   SVar   : {n : _} -> {t : _} -> ByteBounds -> NVar (V (NM n) t) sc -> STerm t sc
+  SField :
+       ByteBounds
+    -> (v : VarName)
+    -> IsField v ps t
+    -> STerm (TRec ps) sc
+    -> STerm t sc
   SLam   :
        ByteBounds
     -> (v : BindName)
@@ -50,6 +56,10 @@ data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type where
   Nil  : SRecord [] sc
   (::) : (p : (VarName,STerm t sc)) -> SRecord ps sc -> SRecord ((fst p, t) :: ps) sc
 
+getField : IsField v ps t -> SRecord ps sc -> STerm t sc
+getField IFZ     ((_,t)::_) = t
+getField (IFS x) (_::ps)    = getField x ps
+
 ||| Top-level definitions
 public export
 data Entry : Type where
@@ -66,16 +76,17 @@ restoreRec :
 
 export
 restore : {sc : _} -> STerm t sc -> Term
-restore (SVar {n} b _) = TVar b n
-restore (SApp b t s)   = TApp b (restore t) (restore s)
-restore (SLam b x t y) = TLam b x (cast t) (restore y)
-restore (SPrim b p)    = TPrim b p
-restore (SRec b r)     = restoreRec b [<] r
-restore (SIf b i x y)  = TIf b (restore i) (restore x) (restore y)
-restore (SFix b x)     = TApp b "fix" (restore x)
-restore (SSucc b x)    = TApp b "succ" (restore x)
-restore (SPred b x)    = TApp b "pred" (restore x)
-restore (SIsZ b x)     = TApp b "iszero" (restore x)
+restore (SVar {n} b _)   = TVar b n
+restore (SField b v _ t) = TField b (restore t) v
+restore (SApp b t s)     = TApp b (restore t) (restore s)
+restore (SLam b x t y)   = TLam b x (cast t) (restore y)
+restore (SPrim b p)      = TPrim b p
+restore (SRec b r)       = restoreRec b [<] r
+restore (SIf b i x y)    = TIf b (restore i) (restore x) (restore y)
+restore (SFix b x)       = TApp b "fix" (restore x)
+restore (SSucc b x)      = TApp b "succ" (restore x)
+restore (SPred b x)      = TApp b "pred" (restore x)
+restore (SIsZ b x)       = TApp b "iszero" (restore x)
 
 restoreRec b sp [] = TRec b (sp <>> [])
 restoreRec b sp ((v,t)::ps) = restoreRec b (sp:<(v,restore t)) ps
@@ -87,16 +98,17 @@ restoreRec b sp ((v,t)::ps) = restoreRec b (sp:<(v,restore t)) ps
 shiftRec : GenShift (SRecord ps)
 
 shiftImpl : GenShift (STerm t)
-shiftImpl sol son (SVar b x)     = SVar b (genShift sol son x)
-shiftImpl sol son (SApp b t s)   = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
-shiftImpl sol son (SLam b x t y) = SLam b x t (shiftImpl (suc sol) son y)
-shiftImpl sol son (SPrim b p)    = SPrim b p
-shiftImpl sol son (SRec b p)     = SRec b (shiftRec sol son p)
-shiftImpl sol son (SIf b i t e)  = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
-shiftImpl sol son (SFix b x)     = SFix b (shiftImpl sol son x)
-shiftImpl sol son (SSucc b x)    = SSucc b (shiftImpl sol son x)
-shiftImpl sol son (SPred b x)    = SPred b (shiftImpl sol son x)
-shiftImpl sol son (SIsZ b x)     = SIsZ b (shiftImpl sol son x)
+shiftImpl sol son (SVar b x)       = SVar b (genShift sol son x)
+shiftImpl sol son (SField b v p x) = SField b v p (shiftImpl sol son x)
+shiftImpl sol son (SApp b t s)     = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
+shiftImpl sol son (SLam b x t y)   = SLam b x t (shiftImpl (suc sol) son y)
+shiftImpl sol son (SPrim b p)      = SPrim b p
+shiftImpl sol son (SRec b p)       = SRec b (shiftRec sol son p)
+shiftImpl sol son (SIf b i t e)    = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
+shiftImpl sol son (SFix b x)       = SFix b (shiftImpl sol son x)
+shiftImpl sol son (SSucc b x)      = SSucc b (shiftImpl sol son x)
+shiftImpl sol son (SPred b x)      = SPred b (shiftImpl sol son x)
+shiftImpl sol son (SIsZ b x)       = SIsZ b (shiftImpl sol son x)
 
 shiftRec sol son []          = []
 shiftRec sol son ((v,t)::ps) = (v,shiftImpl sol son t) :: shiftRec sol son ps
@@ -107,16 +119,17 @@ Shiftable TTVar (STerm t) where genShift = shiftImpl
 strRec : GenStrengthen (SRecord ps)
 
 strImpl : GenStrengthen (STerm t)
-strImpl s t (SVar b x)     = SVar b <$> genStrengthen s t x
-strImpl s t (SApp b x y)   = [| SApp (pure b) (strImpl s t x) (strImpl s t y) |]
-strImpl s t (SLam b x p y) = SLam b x p <$> strImpl s (suc t) y
-strImpl s t (SPrim b p)    = Just $ SPrim b p
-strImpl s t (SRec b p)     = SRec b <$> strRec s t p
-strImpl s t (SIf b i x y)  = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
-strImpl s t (SFix b x)     = SFix b <$> strImpl s t x
-strImpl s t (SSucc b x)    = SSucc b <$> strImpl s t x
-strImpl s t (SPred b x)    = SPred b <$> strImpl s t x
-strImpl s t (SIsZ b x)     = SIsZ b <$> strImpl s t x
+strImpl s t (SVar b x)       = SVar b <$> genStrengthen s t x
+strImpl s t (SField b v p x) = SField b v p <$> strImpl s t x
+strImpl s t (SApp b x y)     = [| SApp (pure b) (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SLam b x p y)   = SLam b x p <$> strImpl s (suc t) y
+strImpl s t (SPrim b p)      = Just $ SPrim b p
+strImpl s t (SRec b p)       = SRec b <$> strRec s t p
+strImpl s t (SIf b i x y)    = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SFix b x)       = SFix b <$> strImpl s t x
+strImpl s t (SSucc b x)      = SSucc b <$> strImpl s t x
+strImpl s t (SPred b x)      = SPred b <$> strImpl s t x
+strImpl s t (SIsZ b x)       = SIsZ b <$> strImpl s t x
 
 strRec s t [] = Just []
 strRec s t ((v,r)::ps) =
@@ -130,16 +143,17 @@ Strengthenable TTVar (STerm t) where genStrengthen = strImpl
 embedRec : Embed (SRecord ps)
 
 embedImpl : Embed (STerm t)
-embedImpl (SVar b x)      = SVar b (embed x)
-embedImpl (SApp b t s)    = SApp b (embedImpl t) (embedImpl s)
-embedImpl (SLam b x p y)  = SLam b x p (embedImpl y)
-embedImpl (SPrim b p)     = SPrim b p
-embedImpl (SRec b p)      = SRec b (embedRec p)
-embedImpl (SIf b i x y)   = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
-embedImpl (SFix b x)      = SFix b $ embedImpl x
-embedImpl (SSucc b x)     = SSucc b $ embedImpl x
-embedImpl (SPred b x)     = SPred b $ embedImpl x
-embedImpl (SIsZ b x)      = SIsZ b $ embedImpl x
+embedImpl (SVar b x)         = SVar b (embed x)
+embedImpl (SField b v p x)   = SField b v p (embedImpl x)
+embedImpl (SApp b t s)       = SApp b (embedImpl t) (embedImpl s)
+embedImpl (SLam b x p y)     = SLam b x p (embedImpl y)
+embedImpl (SPrim b p)        = SPrim b p
+embedImpl (SRec b p)         = SRec b (embedRec p)
+embedImpl (SIf b i x y)      = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
+embedImpl (SFix b x)         = SFix b $ embedImpl x
+embedImpl (SSucc b x)        = SSucc b $ embedImpl x
+embedImpl (SPred b x)        = SPred b $ embedImpl x
+embedImpl (SIsZ b x)         = SIsZ b $ embedImpl x
 
 embedRec [] = []
 embedRec ((v,t)::ps) = (v,embedImpl t) :: embedRec ps
@@ -205,7 +219,11 @@ parameters (env : Env Entry)
         Just (Def _ ct) => check t b (embed ct)
         _               => bindErr b v
 
-  typecheckAs t (TField b x v)     = unsupported b
+  typecheckAs t (TField b x v) = Prelude.do
+    (TRec ps ** x2) <- typecheck x | (t ** _) => notField b v t
+    case isField v ps of
+      Just (s ** prf) => check t b (SField b v prf x2)
+      Nothing         => notField b v (TRec ps)
 
   typecheckAs t (TLam b v rt scope)   = Prelude.do
     tpe <- resolveTpe rt
@@ -245,7 +263,11 @@ parameters (env : Env Entry)
         Just (Def _ ct) => Right (_ ** embed ct)
         _               => bindErr b v
 
-  typecheck (TField b t v)     = unsupported b
+  typecheck (TField b x v) = Prelude.do
+    (TRec ps ** x2) <- typecheck x | (t ** _) => notField b v t
+    case isField v ps of
+      Just (t ** prf) => Right (t ** SField b v prf x2)
+      Nothing         => notField b v (TRec ps)
 
   typecheck (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
     (TFun s t ** sarg) <- typecheck arg | (t ** _) => funErr arg t
@@ -299,15 +321,16 @@ subst v s (SVar b x)    =
   case sameNVar x v of
     Just0 prf => rewrite cong type prf in s
     Nothing0  => SVar b x
-subst v s (SApp b t x)   = SApp b (subst v s t) (subst v s x)
-subst v s (SLam b x p y) = SLam b x p $ subst (shift v) (shift s) y
-subst v s (SPrim b p)    = SPrim b p
-subst v s (SRec b p)     = SRec b (substRec v s p)
-subst v s (SIf b i x y)  = SIf b (subst v s i) (subst v s x) (subst v s y)
-subst v s (SFix b x)     = SFix b $ subst v s x
-subst v s (SSucc b x)    = SSucc b $ subst v s x
-subst v s (SPred b x)    = SPred b $ subst v s x
-subst v s (SIsZ b x)     = SIsZ b $ subst v s x
+subst v s (SApp b t x)      = SApp b (subst v s t) (subst v s x)
+subst v s (SField b y p x)  = SField b y p (subst v s x)
+subst v s (SLam b x p y)    = SLam b x p $ subst (shift v) (shift s) y
+subst v s (SPrim b p)       = SPrim b p
+subst v s (SRec b p)        = SRec b (substRec v s p)
+subst v s (SIf b i x y)     = SIf b (subst v s i) (subst v s x) (subst v s y)
+subst v s (SFix b x)        = SFix b $ subst v s x
+subst v s (SSucc b x)       = SSucc b $ subst v s x
+subst v s (SPred b x)       = SPred b $ subst v s x
+subst v s (SIsZ b x)        = SIsZ b $ subst v s x
 
 substRec v s [] = []
 substRec v s ((x,y)::ps) = (x,subst v s y)::substRec v s ps
@@ -332,6 +355,14 @@ step t@(SApp b fun@(SLam _ v tp sc) arg) =
     True  => fromMaybe t $ strengthen (suc zero) $ subst nzero (shift arg) sc
     False => SApp b fun (step arg)
 step (SApp b fun arg) = SApp b (step fun) arg
+
+step (SField b v p t) =
+  case isVal t of
+    True => case t of
+      SRec _ ps => getField p ps
+      _         => SField b v p t
+    False => SField b v p (step t)
+
 step (SIf b pred fst snd) =
   case pred of
     SPrim _ (PBool True)  => fst
@@ -370,6 +401,11 @@ namespace Value
   data Value : (t : Tpe) -> (sc : Scope TTVar) -> Type where
     VPrim : (p : Prim) -> Value (PrimTpe p) sc
     VRec  : (r : VRecord ps sc) -> Value (TRec ps) sc
+    VFld  :
+         (v : VarName)
+      -> (p : IsField v ps t)
+      -> Value (TRec ps) sc
+      -> Value t sc
     VLam  :
          (v : BindName)
       -> (t1 : Tpe)
@@ -387,6 +423,7 @@ toTerm : Value t sc -> STerm t sc
 toTerm (VPrim p)     = SPrim NoBB p
 toTerm (VRec r)      = SRec NoBB (torec r)
 toTerm (VLam v t sc) = SLam NoBB v t sc
+toTerm (VFld v p t)  = SField NoBB v p (toTerm t)
 
 torec []          = []
 torec ((v,t)::ps) = (v,toTerm t) :: torec ps
@@ -399,10 +436,10 @@ tovalrec : SRecord ps sc -> Maybe (VRecord ps sc)
 
 export
 toValue : STerm t sc -> Maybe (Value t sc)
-toValue (SLam x v s y) = Just (VLam v s y)
-toValue (SPrim x p)    = Just (VPrim p)
-toValue (SRec x r)     = VRec <$> tovalrec r
-toValue _              = Nothing
+toValue (SLam _ v s y)   = Just (VLam v s y)
+toValue (SPrim _ p)      = Just (VPrim p)
+toValue (SRec _ r)       = VRec <$> tovalrec r
+toValue _                = Nothing
 
 tovalrec [] = Just []
 tovalrec ((v,t)::ps) =
