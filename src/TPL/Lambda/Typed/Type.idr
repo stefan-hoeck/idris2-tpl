@@ -123,7 +123,7 @@ prettyTpe (PRec _ fs)  = "<\{prettyFields [<] fs}>"
 paren t@(PFun {}) = "(\{prettyTpe t})"
 paren t           = prettyTpe t
 
-prettyFields ss []          = fastConcat (ss <>> [])
+prettyFields ss []          = fastConcat $ intersperse "," (ss <>> [])
 prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}:\{prettyTpe t}") ps
 
 export %inline
