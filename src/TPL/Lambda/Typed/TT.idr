@@ -205,6 +205,8 @@ parameters (env : Env Entry)
         Just (Def _ ct) => check t b (embed ct)
         _               => bindErr b v
 
+  typecheckAs t (TField b x v)     = unsupported b
+
   typecheckAs t (TLam b v rt scope)   = Prelude.do
     tpe <- resolveTpe rt
     case t of
@@ -242,6 +244,8 @@ parameters (env : Env Entry)
       _                        => case lookup v env of
         Just (Def _ ct) => Right (_ ** embed ct)
         _               => bindErr b v
+
+  typecheck (TField b t v)     = unsupported b
 
   typecheck (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
     (TFun s t ** sarg) <- typecheck arg | (t ** _) => funErr arg t
