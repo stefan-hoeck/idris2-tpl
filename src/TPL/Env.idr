@@ -40,9 +40,9 @@ mkEnv ini fun = go ini
 public export
 data ScopedEnv : (p : t -> Type) -> Scope t -> Type where
   Lin  : ScopedEnv p [<]
-  (:<) : {0 v : t} -> ScopedEnv p sc -> (term : Lazy (p v)) -> ScopedEnv p (sc:<v)
+  (:<) : {0 v : t} -> ScopedEnv p sc -> (term : p v) -> ScopedEnv p (sc:<v)
 
-envValImpl : ScopedEnv p sc -> IsVar pos x sc -> p x
+envValImpl : ScopedEnv p sc -> IsVar n x sc -> p x
 envValImpl (_:<trm) IZ = trm
 envValImpl (i:<_)   (IS prf) = envValImpl i prf
 

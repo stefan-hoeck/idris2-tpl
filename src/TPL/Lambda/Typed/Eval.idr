@@ -7,9 +7,18 @@ import public TPL.Lambda.Typed.TT
 %default total
 
 public export
-data VRecord : List (VarName, Tpe) -> Type
+data Value : (t : Tpe) -> Type
 
 public export
+data VRecord : List (VarName, Tpe) -> Type where
+  Nil  : VRecord []
+  (::) : (p : (VarName,Value t)) -> VRecord ps -> VRecord ((fst p, t)::ps)
+
+public export
+data Entry : Tpe -> Type where
+  Strict  : Value t -> Entry t
+  Delayed : Lazy (Value t) -> Entry t
+
 data Value : (t : Tpe) -> Type where
   VPrim : (p : Prim) -> Value (PrimTpe p)
   VRec  : (r : VRecord ps) -> Value (TRec ps)
@@ -17,17 +26,13 @@ data Value : (t : Tpe) -> Type where
        {0 sc : Scope TTVar}
     -> (v   : BindName)
     -> (t1  : Tpe)
-    -> (env : ScopedEnv (Value . TTVar.type) sc)
+    -> (env : ScopedEnv (Entry . TTVar.type) sc)
     -> STerm t2 (sc:<V v t1)
     -> Value (TFun t1 t2)
 
-data VRecord : List (VarName, Tpe) -> Type where
-  Nil  : VRecord []
-  (::) : (p : (VarName,Value t)) -> VRecord ps -> VRecord ((fst p, t)::ps)
-
 public export
 0 TEnv : Scope TTVar -> Type
-TEnv sc = ScopedEnv (Value . TTVar.type) sc
+TEnv sc = ScopedEnv (Entry . TTVar.type) sc
 
 export
 getVField : IsField v ps t -> VRecord ps -> Value t
@@ -53,6 +58,10 @@ Interpolation (Value t) where
 -- Big-step Evaluation
 --------------------------------------------------------------------------------
 
+value : Entry t -> Value t
+value (Strict x)  = x
+value (Delayed x) = x
+
 field : IsField v ps t -> Value (TRec ps) -> Value t
 field x (VRec r) = getVField x r
 field x (VLam _ _ _ _)    impossible
@@ -68,7 +77,7 @@ bigEval : TEnv sc -> STerm t sc -> Value t
 bigEval env (SField b v y z) = field y (bigEval env z)
 bigEval env (SApp b y z) =
   case bigEval env y of
-    VLam v t1 env2 scope => bigEval (env2 :< bigEval env z) scope
+    VLam v t1 env2 scope => bigEval (env2 :< Strict (bigEval env z)) scope
     VRec _          impossible
     VPrim (PNat _)  impossible
     VPrim (PBool _) impossible
@@ -80,12 +89,12 @@ bigEval env (SIf b pred fst snd) =
     VPrim (PBool False) => bigEval env snd
 bigEval env (SFix b y) =
   case bigEval env y of
-    VLam v t1 env2 scope => bigEval (env2 :< bigEval env (SFix b y)) scope
+    VLam v t1 env2 scope => bigEval (env2 :< Delayed (bigEval env (SFix b y))) scope
     VRec _          impossible
     VPrim (PNat _)  impossible
     VPrim (PBool _) impossible
     VPrim PUnit     impossible
-bigEval env (SVar _ x) = envVal x env
+bigEval env (SVar _ x) = value $ envVal x env
 bigEval env (SLam _ v t sc) = VLam v t env sc
 bigEval env (SPrim _ p) = VPrim p
 bigEval env (SSucc b y) =
