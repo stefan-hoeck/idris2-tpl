@@ -29,8 +29,8 @@ lamErr : List String -> SK q -> F1 q LamErr
 lamErr ss sk = T1.do
   st <- getStack
   case openBounds st of
-    Just (BB p _) => push1 (positions sk) p >> unclosedIfEOI "(" ss sk
-    _             => unexpected ss sk
+    Just (BB p _,s) => push1 (positions sk) p >> unclosedIfEOI s ss sk
+    _               => unexpected ss sk
 
 perr : Arr32 PSz (SK q -> F1 q LamErr)
 perr = arr32 PSz (lamErr []) []
