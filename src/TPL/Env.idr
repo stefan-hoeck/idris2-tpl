@@ -36,3 +36,16 @@ mkEnv ini fun = go ini
       case fun gamma x.val of
         Right vb => go (insert x.name vb gamma) xs
         Left  x  => Left x
+
+public export
+data ScopedEnv : (p : t -> Type) -> Scope t -> Type where
+  Lin  : ScopedEnv p [<]
+  (:<) : {0 v : t} -> ScopedEnv p sc -> (term : p v) -> ScopedEnv p (sc:<v)
+
+envValImpl : ScopedEnv p sc -> IsVar pos x sc -> p x
+envValImpl (_:<trm) IZ = trm
+envValImpl (i:<_)   (IS prf) = envValImpl i prf
+
+export %inline
+envVal : NVar v sc -> ScopedEnv p sc -> p v
+envVal (NV p prf) env = envValImpl env (fromNat p prf)
