@@ -114,7 +114,7 @@ example =
   %eval c2 succ 4;
   %eval plus 100 200;
   %eval times 200 200;
-  %eval factorial (plus 3 2);
+  %eval factorial (times 3 3);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
   %eval
     (λx: Complex . <fact = x.snd.nat, strict = x.snd.bool>)
