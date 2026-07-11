@@ -159,8 +159,8 @@ export
 typeSemicolon : StateTrans STATE
 typeSemicolon st sx =
   case endType st sx of
-    sx:<sd:<(B v b):>ALIAS_COLON:<t:>TYPE => sx:<(sd:<Alias b v t):>TOP
-    sx:<sd:<(B v b):>DECL_COLON:<t:>TYPE  => sx:<(sd:<Decl b v t):>TOP
+    sx:<sd:<b:>ALIAS_COLON:<t:>TYPE => sx:<(sd:<Alias b.bounds b.val t):>TOP
+    sx:<sd:<b:>DECL_COLON:<t:>TYPE  => sx:<(sd:<Decl b.bounds b.val t):>TOP
     _ => err st sx
 
 export
@@ -309,3 +309,17 @@ obState _                 _  = Nothing
 export
 openBounds : Stack True STATE [<] -> Maybe (ByteBounds,String)
 openBounds (sx:>st) = obState st sx
+
+test : List (StateTrans STATE)
+test =
+  [ var (pure "foo")
+  , colon
+  , openRecordType neutral
+  , var (pure "foo")
+  , colon
+  , typeAtom (pvar $ pure "Nat")
+  , typeSemicolon
+  ]
+
+run : List (StateTrans STATE) -> Stack True STATE [<]
+run = foldl (\s,f => let sx:>st := s in f st sx) ([<[<]]:>TOP)

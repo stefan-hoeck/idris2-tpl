@@ -147,7 +147,7 @@ unclosedTypeParen =
 unclosedTypeBrace : String
 unclosedTypeBrace =
   """
-  foo : {foo: Nat, bar : Bool
+  foo : {foo : Nat ;
   """
 
 unclosedValBrace : String
