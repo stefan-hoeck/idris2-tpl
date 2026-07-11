@@ -54,7 +54,7 @@ process env (Defn bb nm trm) =
     Nothing  => unknown bb nm
 process env (Eval x)   =
   map
-    (\(t ** v) => (env, Just "Type: \{t}, Value: \{restore $ bigEval v}"))
+    (\(t ** v) => (env, Just "Type: \{t}, Value: \{bigEval [<] v}"))
     (typecheck {sc = [<]} env x)
 
 covering
@@ -103,7 +103,7 @@ example =
     fix
       ( λrec : Nat->Nat
       . λn   : Nat
-      . if iszero n then 1 else times n (rec (pred n))
+      . if iszero n then 1 else times (rec (pred n)) n
       );
 
   %alias BoolNat : <bool: Bool, nat: Nat>;
@@ -113,8 +113,8 @@ example =
   %eval c2 succ 0;
   %eval c2 succ 4;
   %eval plus 100 200;
-  %eval times 100 200;
-  %eval factorial (plus 2 3);
+  %eval times 200 200;
+  %eval factorial (plus 3 2);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
   %eval
     (λx: Complex . <fact = x.snd.nat, strict = x.snd.bool>)
