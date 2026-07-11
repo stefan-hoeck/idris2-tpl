@@ -138,6 +138,25 @@ example =
   %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
   """
 
+unclosedTypeParen : String
+unclosedTypeParen =
+  """
+  %alias Foo : ((Nat -> Nat) -> Nat;
+  """
+
+unclosedTypeBrace : String
+unclosedTypeBrace =
+  """
+  foo : {foo: Nat, bar : Bool
+  """
+
+unclosedValBrace : String
+unclosedValBrace =
+  """
+  foo : {foo: Nat, bar : Bool};
+  foo = {foo = 12, bar = True
+  """
+
 covering
 testRun : String -> IO ()
 testRun s = Prelude.do

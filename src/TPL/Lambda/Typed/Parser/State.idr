@@ -282,11 +282,30 @@ arrow : StateTrans STATE
 arrow TYPE_SEQ sx = sx:>TYPE_ARROW
 arrow st       sx = err st sx
 
+obState : STATE st -> Stack b STATE st -> Maybe (ByteBounds,String)
+obState LAMBDA            (sx:>st:<_)       = obState st sx
+obState LAMBDA_VAR        (sx:>st:<_:<_)    = obState st sx
+obState LAMBDA_COLON      (sx:>st:<_:<_)    = obState st sx
+obState LAMBDA_DOT        (sx:>st:<_:<_:<_) = obState st sx
+obState APP               (sx:>st:<_:<_)    = obState st sx
+obState TERM_OPEN         (sx:<b)           = Just (b, "(")
+obState SEQ               (sx:<b:<_)        = Just (b, "(")
+obState RECORD            (sx:<b:<_)        = Just (b, "{")
+obState RECORD_FIELD      (sx:<b:<_:<_)     = Just (b, "{")
+obState RECORD_EQ         (sx:<b:<_:<_)     = Just (b, "{")
+obState RECORD_COMMA      (sx:<b:<_)        = Just (b, "{")
+obState IF                (sx:>st:<_)       = obState st sx
+obState THEN              (sx:>st:<_:<_)    = obState st sx
+obState ELSE              (sx:>st:<_:<_:<_) = obState st sx
+obState TYPE_SEQ          (sx:>st:<_:<_)    = obState st sx
+obState TYPE_ARROW        (sx:>st:<_:<_)    = obState st sx
+obState TYPE_OPEN         (sx:<b)           = Just (b, "(")
+obState RECORD_TYPE       (sx:<b:<_)        = Just (b, "{")
+obState RECORD_TYPE_FIELD (sx:<b:<_:<_)     = Just (b, "{")
+obState RECORD_TYPE_COLON (sx:<b:<_:<_)     = Just (b, "{")
+obState RECORD_TYPE_COMMA (sx:<b:<_)        = Just (b, "{")
+obState _                 _  = Nothing
+
 export
-openBounds : Stack b STATE st -> Maybe ByteBounds
-openBounds [<]               = Nothing
-openBounds (_:<b:>TERM_OPEN) = Just b
-openBounds (_:<b:>TYPE_OPEN) = Just b
-openBounds (_:<b:<_:>SEQ)    = Just b
-openBounds (x:>_)            = openBounds x
-openBounds (x:<_)            = openBounds x
+openBounds : Stack True STATE [<] -> Maybe (ByteBounds,String)
+openBounds (sx:>st) = obState st sx
