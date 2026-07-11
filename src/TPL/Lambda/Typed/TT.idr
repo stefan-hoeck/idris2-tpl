@@ -67,14 +67,13 @@ data Entry : Type where
   Als : (type : Tpe) -> Entry
 
 restoreRec :
-     {sc : _}
-  -> ByteBounds
+     ByteBounds
   -> SnocList (VarName,Term)
   -> SRecord ps sc
   -> Term
 
 export
-restore : {sc : _} -> STerm t sc -> Term
+restore : STerm t sc -> Term
 restore (SVar {n} b _)   = TVar b n
 restore (SField b v _ t) = TField b (restore t) v
 restore (SApp b t s)     = TApp b (restore t) (restore s)
