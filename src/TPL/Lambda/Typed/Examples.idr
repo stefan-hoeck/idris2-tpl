@@ -106,19 +106,19 @@ example =
       . if iszero n then 1 else times (rec (pred n)) n
       );
 
-  %alias EvenOdd : <iseven : Nat -> Bool, isodd : Nat -> Bool>;
+  %alias EvenOdd : {iseven : Nat -> Bool, isodd : Nat -> Bool};
 
   evenOdd : EvenOdd;
   evenOdd =
     fix
       ( λio : EvenOdd
-      . < iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n),
-          isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
-        >
+      . { iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n)
+        , isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
+        }
       );
 
-  %alias BoolNat : <bool: Bool, nat: Nat>;
-  %alias Complex : <fst: Nat, snd: BoolNat>;
+  %alias BoolNat : {bool: Bool, nat: Nat};
+  %alias Complex : {fst: Nat, snd: BoolNat};
 
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
@@ -128,14 +128,14 @@ example =
   %eval factorial (times 3 3);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
   %eval
-    (λx: Complex . <fact = x.snd.nat, strict = x.snd.bool>)
-      < fst = 0
+    (λx: Complex . {fact = x.snd.nat, strict = x.snd.bool})
+      { fst = 0
       , snd =
-          < bool = iszero 3
+          { bool = iszero 3
           , nat = factorial 4
-          >
-      >;
-  %eval evenOdd.isodd <fst = factorial 5, snd = False>.fst;
+          }
+      };
+  %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
   """
 
 covering
