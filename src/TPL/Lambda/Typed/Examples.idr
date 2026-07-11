@@ -1,8 +1,8 @@
 module TPL.Lambda.Typed.Examples
 
 import Text.ILex
+import TPL.Lambda.Typed.Eval
 import TPL.Lambda.Typed.Parser
-import TPL.Lambda.Typed.TT
 
 %default total
 
@@ -54,7 +54,7 @@ process env (Defn bb nm trm) =
     Nothing  => unknown bb nm
 process env (Eval x)   =
   map
-    (\(t ** v) => (env, Just "Type: \{t}, Value: \{eval v}"))
+    (\(t ** v) => (env, Just "Type: \{t}, Value: \{restore $ bigEval v}"))
     (typecheck {sc = [<]} env x)
 
 covering
