@@ -106,6 +106,17 @@ example =
       . if iszero n then 1 else times (rec (pred n)) n
       );
 
+  %alias EvenOdd : <iseven : Nat -> Bool, isodd : Nat -> Bool>;
+
+  evenOdd : EvenOdd;
+  evenOdd =
+    fix
+      ( λio : EvenOdd
+      . < iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n),
+          isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
+        >
+      );
+
   %alias BoolNat : <bool: Bool, nat: Nat>;
   %alias Complex : <fst: Nat, snd: BoolNat>;
 
@@ -124,6 +135,7 @@ example =
           , nat = factorial 4
           >
       >;
+  %eval evenOdd.isodd <fst = factorial 5, snd = False>.fst;
   """
 
 covering
