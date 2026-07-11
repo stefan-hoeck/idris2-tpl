@@ -132,7 +132,7 @@ pretty (TField _ t v)  = "\{paren t}.\{v.val}"
 pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
-pretty (TRec _ p)      = "<\{prettyFields [<] p}>"
+pretty (TRec _ p)      = "{\{prettyFields [<] p}}"
 pretty (TIf _ i t e)   = "if \{pretty i} then \{pretty t} else \{pretty e}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"

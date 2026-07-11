@@ -131,7 +131,7 @@ prettyFields : SnocList String -> List (VarName,RawTpe) -> String
 prettyTpe : RawTpe -> String
 prettyTpe (PVar _ v)   = interpolate v
 prettyTpe (PFun _ a r) = "\{paren a} -> \{prettyTpe r}"
-prettyTpe (PRec _ fs)  = "<\{prettyFields [<] fs}>"
+prettyTpe (PRec _ fs)  = "{\{prettyFields [<] fs}}"
 
 paren t@(PFun {}) = "(\{prettyTpe t})"
 paren t           = prettyTpe t

@@ -59,7 +59,7 @@ vars =
 atoms : Steps q PSz SK
 atoms =
      step '(' (bounds >>= dtrans . openTerm)
-  :: step '<' (bounds >>= dtrans . openRecord)
+  :: step '{' (bounds >>= dtrans . openRecord)
   :: step "unit" (bounds >>= dtrans . atom . unit)
   :: bools (\b => bounded' b >>= dtrans . atom . bool)
   ++ nats  (\b => bounded' b >>= dtrans . atom . int)
@@ -76,7 +76,7 @@ atomOrClose =
   spaced $
        step ';' (dtrans termSemicolon)
     :: step ')' (dtrans closeTerm)
-    :: step '>' (bounds >>= dtrans . closeRecord)
+    :: step '}' (bounds >>= dtrans . closeRecord)
     :: step ',' (dtrans recordComma)
     :: bytes proj (\b => bounded' (field b) >>= dtrans . projection)
     :: atoms
@@ -85,14 +85,14 @@ typeAtoms : DFA q PSz SK
 typeAtoms =
   spaced $
        step "(" (bounds >>= dtrans . openType)
-    :: step "<" (bounds >>= dtrans . openRecordType)
+    :: step "{" (bounds >>= dtrans . openRecordType)
     :: upperName (dtrans . typeAtom . pvar)
 
 afterType : DFA q PSz SK
 afterType =
   spaced
     [ step ')' (dtrans closeType)
-    , step '>' (bounds >>= dtrans . closeRecordType)
+    , step '}' (bounds >>= dtrans . closeRecordType)
     , step '.' (dtrans dot)
     , step ',' (dtrans recordTypeComma)
     , step ';' (dtrans typeSemicolon)
