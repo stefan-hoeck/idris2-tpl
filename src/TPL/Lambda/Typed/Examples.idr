@@ -54,7 +54,7 @@ process env (Defn bb nm trm) =
     Nothing  => unknown bb nm
 process env (Eval x)   =
   map
-    (\(t ** v) => (env, Just "Type: \{t}, Value: \{bigEval [<] v}"))
+    (\(t ** v) => (env, Just "Type: \{t}, Value: \{eval [<] v}"))
     (typecheck {sc = [<]} env x)
 
 covering
