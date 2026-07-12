@@ -40,6 +40,12 @@ data STATE : SnocList Type -> Type where
   LET_EQ              : STATE [<ByteBounds,BindName]
   LET_IN              : STATE [<ByteBounds,BindName,Term]
 
+  LETREC              : STATE [<ByteBounds]
+  LETREC_VAR          : STATE [<ByteBounds,BindName]
+  LETREC_COLON        : STATE [<ByteBounds,BindName]
+  LETREC_EQ           : STATE [<ByteBounds,BindName,RawTpe]
+  LETREC_IN           : STATE [<ByteBounds,BindName,RawTpe,Term]
+
   TERM                : STATE [<Term]
   APP                 : STATE [<Term,SnocList Term]
   TERM_OPEN           : STATE [<ByteBounds]
@@ -84,11 +90,12 @@ err : StateTrans STATE
 err st sx = sx:>st:>ERR
 
 term : Term -> StateTrans STATE
-term x LAMBDA_DOT (sx:>st:<b:<v:<bt) = term (TLam b v bt x) st sx
-term x APP        (sx:>st:<y:<ys)    = term (appSnoc y (ys:<x)) st sx
-term x ELSE       (sx:>st:<b:<i:<t)  = term (tif b i t x) st sx
-term x LET_IN     (sx:>st:<b:<v:<s)  = term (TLet (b <+> cast x) v s x) st sx
-term x st         sx                 = sx:>st:<x:>TERM
+term x LAMBDA_DOT (sx:>st:<b:<v:<bt)   = term (TLam b v bt x) st sx
+term x APP        (sx:>st:<y:<ys)      = term (appSnoc y (ys:<x)) st sx
+term x ELSE       (sx:>st:<b:<i:<t)    = term (tif b i t x) st sx
+term x LET_IN     (sx:>st:<b:<v:<s)    = term (TLet (b <+> cast x) v s x) st sx
+term x LETREC_IN  (sx:>st:<b:<v:<t:<s) = term (TLetrec (b <+> cast x) v t s x) st sx
+term x st         sx                   = sx:>st:<x:>TERM
 
 endTerm : StateTrans STATE
 endTerm APP (sx:>st:<x:<sy) = term (appSnoc x sy) st sx
@@ -124,6 +131,7 @@ colon LAMBDA_VAR        sx = sx:>LAMBDA_COLON
 colon TOP_FUNNAME       sx = sx:>DECL_COLON
 colon ALIAS_TYPENAME    sx = sx:>ALIAS_COLON
 colon RECORD_TYPE_FIELD sx = sx:>RECORD_TYPE_COLON
+colon LETREC_VAR        sx = sx:>LETREC_COLON
 colon st                sx = err st sx
 
 export
@@ -131,7 +139,10 @@ eq : StateTrans STATE
 eq TOP_FUNNAME  sx = sx:>DEFN_EQ
 eq RECORD_FIELD sx = sx:>RECORD_EQ
 eq LET_VAR      sx = sx:>LET_EQ
-eq st           sx = err st sx
+eq st           sx =
+  case endType st sx of
+    sx:>LETREC_COLON:<t:>TYPE => sx:<t:>LETREC_EQ
+    _ => err st sx
 
 export
 lambda : ByteBounds -> StateTrans STATE
@@ -192,17 +203,23 @@ export
 in' : StateTrans STATE
 in' st sx =
   case endTerm st sx of
-    sy:>LET_EQ:<t:>TERM => sy:<t:>LET_IN
-    _                   => err st sx
+    sy:>LET_EQ:<t:>TERM    => sy:<t:>LET_IN
+    sy:>LETREC_EQ:<t:>TERM => sy:<t:>LETREC_IN
+    _                      => err st sx
 
 export
 let' : ByteBounds -> StateTrans STATE
 let' b st sx = sx:>st:<b:>LET
 
 export
+letrec' : ByteBounds -> StateTrans STATE
+letrec' b st sx = sx:>st:<b:>LETREC
+
+export
 var : ByteBounded VarName -> StateTrans STATE
 var v LAMBDA             sx = sx:<NM v.val:>LAMBDA_VAR
 var v LET                sx = sx:<NM v.val:>LET_VAR
+var v LETREC             sx = sx:<NM v.val:>LETREC_VAR
 var v TOP                sx = sx:<v:>TOP_FUNNAME
 var v RECORD             sx = sx:<v.val:>RECORD_FIELD
 var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
@@ -214,6 +231,7 @@ export
 placeholder : StateTrans STATE
 placeholder LAMBDA sx = sx:<PH:>LAMBDA_VAR
 placeholder LET    sx = sx:<PH:>LET_VAR
+placeholder LETREC sx = sx:<PH:>LETREC_VAR
 placeholder st     sx = err st sx
 
 export
