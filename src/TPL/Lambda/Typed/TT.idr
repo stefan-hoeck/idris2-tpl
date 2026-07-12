@@ -238,6 +238,8 @@ parameters (env : Env Entry)
     (tscp ** scp) <- typecheck scope
     check t b (SApp b (SLam NoBB v targ scp) arg)
 
+  typecheckAs t (TLetrec b v rt val scope) = unsupported b
+
   typecheckAs t (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
     sarg <- typecheckAs (TFun t t) arg
     Right (SFix b2 sarg)
@@ -287,6 +289,8 @@ parameters (env : Env Entry)
     (targ ** arg) <- typecheck rt
     (tscp ** scp) <- typecheck scope
     Right (tscp ** SApp b (SLam NoBB v targ scp) arg)
+
+  typecheck (TLetrec b v t rt scope) = unsupported b
 
   typecheck (TApp b fun arg)   = Prelude.do
     (TFun at rt ** sfun) <- typecheck fun | (t ** _) => funErr fun t
