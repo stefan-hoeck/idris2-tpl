@@ -55,6 +55,7 @@ vars =
   :: step "then" (dtrans then')
   :: step "else" (dtrans else')
   :: step "let" (bounds >>= dtrans . let')
+  :: step "letrec" (bounds >>= dtrans . letrec')
   :: step "in" (dtrans in')
   :: varName (dtrans . var)
 
@@ -98,6 +99,7 @@ afterType =
     , step '.' (dtrans dot)
     , step ',' (dtrans recordTypeComma)
     , step ';' (dtrans typeSemicolon)
+    , step '=' (dtrans eq)
     , step "->" (dtrans arrow)
     ]
 
@@ -108,6 +110,8 @@ top =
     :: step "%eval" (dtrans eval)
     :: vars
 
+bindvars : DFA q PSz SK
+bindvars = spaced (step '_' (dtrans placeholder) :: vars)
 
 ptrans : Lex1 q PSz SK
 ptrans =
@@ -124,15 +128,20 @@ ptrans =
     , entry ALIAS_TYPENAME    $ spaced [step ':' (dtrans colon)]
     , entry ALIAS_COLON       typeAtoms
 
-    , entry LAMBDA            $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LAMBDA            bindvars
     , entry LAMBDA_VAR        $ spaced [step ':' (dtrans colon)]
     , entry LAMBDA_COLON      typeAtoms
     , entry LAMBDA_DOT        terms
 
-    , entry LET               $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LET               bindvars
     , entry LET_VAR           $ spaced [step '=' (dtrans eq)]
     , entry LET_EQ            terms
     , entry LET_IN            terms
+    , entry LETREC            bindvars
+    , entry LETREC_VAR        $ spaced [step ':' (dtrans colon)]
+    , entry LETREC_COLON      typeAtoms
+    , entry LETREC_EQ         terms
+    , entry LETREC_IN         terms
 
     , entry APP               atomOrClose
     , entry TERM_OPEN         terms
@@ -171,39 +180,44 @@ decls = P (cast TOP) (init $ [<[<]]:>TOP) ptrans (\x => (Nothing #)) perr peoi
 -- Proofs
 --------------------------------------------------------------------------------
 
-inBoundsSTATE TOP               = Refl
-inBoundsSTATE TOP_FUNNAME       = Refl
-inBoundsSTATE DECL_COLON        = Refl
-inBoundsSTATE DEFN_EQ           = Refl
-inBoundsSTATE EVAL              = Refl
-inBoundsSTATE ALIAS             = Refl
-inBoundsSTATE ALIAS_TYPENAME    = Refl
-inBoundsSTATE ALIAS_COLON       = Refl
-inBoundsSTATE LAMBDA            = Refl
-inBoundsSTATE LAMBDA_VAR        = Refl
-inBoundsSTATE LAMBDA_COLON      = Refl
-inBoundsSTATE LAMBDA_DOT        = Refl
-inBoundsSTATE LET               = Refl
-inBoundsSTATE LET_VAR           = Refl
-inBoundsSTATE LET_EQ            = Refl
-inBoundsSTATE LET_IN            = Refl
-inBoundsSTATE TERM              = Refl
-inBoundsSTATE APP               = Refl
-inBoundsSTATE TERM_OPEN         = Refl
-inBoundsSTATE SEQ               = Refl
-inBoundsSTATE IF                = Refl
-inBoundsSTATE THEN              = Refl
-inBoundsSTATE ELSE              = Refl
-inBoundsSTATE RECORD            = Refl
-inBoundsSTATE RECORD_FIELD      = Refl
-inBoundsSTATE RECORD_EQ         = Refl
-inBoundsSTATE RECORD_COMMA      = Refl
-inBoundsSTATE TYPE              = Refl
-inBoundsSTATE TYPE_SEQ          = Refl
-inBoundsSTATE TYPE_ARROW        = Refl
-inBoundsSTATE TYPE_OPEN         = Refl
-inBoundsSTATE RECORD_TYPE       = Refl
-inBoundsSTATE RECORD_TYPE_FIELD = Refl
-inBoundsSTATE RECORD_TYPE_COLON = Refl
-inBoundsSTATE RECORD_TYPE_COMMA = Refl
-inBoundsSTATE ERR               = Refl
+inBoundsSTATE TOP                     = Refl
+inBoundsSTATE TOP_FUNNAME             = Refl
+inBoundsSTATE DECL_COLON              = Refl
+inBoundsSTATE DEFN_EQ                 = Refl
+inBoundsSTATE EVAL                    = Refl
+inBoundsSTATE ALIAS                   = Refl
+inBoundsSTATE ALIAS_TYPENAME          = Refl
+inBoundsSTATE ALIAS_COLON             = Refl
+inBoundsSTATE LAMBDA                  = Refl
+inBoundsSTATE LAMBDA_VAR              = Refl
+inBoundsSTATE LAMBDA_COLON            = Refl
+inBoundsSTATE LAMBDA_DOT              = Refl
+inBoundsSTATE LET                     = Refl
+inBoundsSTATE LET_VAR                 = Refl
+inBoundsSTATE LET_EQ                  = Refl
+inBoundsSTATE LET_IN                  = Refl
+inBoundsSTATE LETREC                  = Refl
+inBoundsSTATE LETREC_VAR              = Refl
+inBoundsSTATE LETREC_COLON            = Refl
+inBoundsSTATE LETREC_EQ               = Refl
+inBoundsSTATE LETREC_IN               = Refl
+inBoundsSTATE TERM                    = Refl
+inBoundsSTATE APP                     = Refl
+inBoundsSTATE TERM_OPEN               = Refl
+inBoundsSTATE SEQ                     = Refl
+inBoundsSTATE IF                      = Refl
+inBoundsSTATE THEN                    = Refl
+inBoundsSTATE ELSE                    = Refl
+inBoundsSTATE RECORD                  = Refl
+inBoundsSTATE RECORD_FIELD            = Refl
+inBoundsSTATE RECORD_EQ               = Refl
+inBoundsSTATE RECORD_COMMA            = Refl
+inBoundsSTATE TYPE                    = Refl
+inBoundsSTATE TYPE_SEQ                = Refl
+inBoundsSTATE TYPE_ARROW              = Refl
+inBoundsSTATE TYPE_OPEN               = Refl
+inBoundsSTATE RECORD_TYPE             = Refl
+inBoundsSTATE RECORD_TYPE_FIELD       = Refl
+inBoundsSTATE RECORD_TYPE_COLON       = Refl
+inBoundsSTATE RECORD_TYPE_COMMA       = Refl
+inBoundsSTATE ERR                     = Refl

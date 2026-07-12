@@ -21,12 +21,13 @@ identchar : Gen Char
 identchar = frequency [(10,alphaNum),(1, element ['_', '\''])]
 
 notKeyword : String -> VarName
-notKeyword "if"   = "if_"
-notKeyword "then" = "then_"
-notKeyword "else" = "else_"
-notKeyword "let"  = "let_"
-notKeyword "in"   = "in_"
-notKeyword s      = VN s
+notKeyword "if"     = "if_"
+notKeyword "then"   = "then_"
+notKeyword "else"   = "else_"
+notKeyword "let"    = "let_"
+notKeyword "letrec" = "letrec_"
+notKeyword "in"     = "in_"
+notKeyword s        = VN s
 
 export
 varname : Gen VarName
@@ -96,6 +97,7 @@ term = go 5
         , (2, [| TIf  bb (go k) (go k) (go k) |])
         , (2, [| TLam bb bindname tpe (go k) |])
         , (2, [| TLet bb bindname (go k) (go k) |])
+        , (2, [| TLetrec bb bindname tpe (go k) (go k) |])
         , (2, [| TField bb (go k) (bounded varname) |])
         , (2, rec k)
         ]
