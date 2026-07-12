@@ -110,6 +110,8 @@ top =
     :: step "%eval" (dtrans eval)
     :: vars
 
+bindvars : DFA q PSz SK
+bindvars = spaced (step '_' (dtrans placeholder) :: vars)
 
 ptrans : Lex1 q PSz SK
 ptrans =
@@ -126,17 +128,18 @@ ptrans =
     , entry ALIAS_TYPENAME    $ spaced [step ':' (dtrans colon)]
     , entry ALIAS_COLON       typeAtoms
 
-    , entry LAMBDA            $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LAMBDA            bindvars
     , entry LAMBDA_VAR        $ spaced [step ':' (dtrans colon)]
     , entry LAMBDA_COLON      typeAtoms
     , entry LAMBDA_DOT        terms
 
-    , entry LET               $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LET               bindvars
     , entry LET_VAR           $ spaced [step '=' (dtrans eq)]
     , entry LET_EQ            terms
     , entry LET_IN            terms
-    , entry LETREC            $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LETREC            bindvars
     , entry LETREC_VAR        $ spaced [step ':' (dtrans colon)]
+    , entry LETREC_COLON      typeAtoms
     , entry LETREC_EQ         terms
     , entry LETREC_IN         terms
 
