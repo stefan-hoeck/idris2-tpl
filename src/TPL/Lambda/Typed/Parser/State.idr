@@ -35,6 +35,11 @@ data STATE : SnocList Type -> Type where
   LAMBDA_COLON        : STATE [<ByteBounds,BindName]
   LAMBDA_DOT          : STATE [<ByteBounds,BindName,RawTpe]
 
+  LET                 : STATE [<ByteBounds]
+  LET_VAR             : STATE [<ByteBounds,BindName]
+  LET_EQ              : STATE [<ByteBounds,BindName]
+  LET_IN              : STATE [<ByteBounds,BindName,Term]
+
   TERM                : STATE [<Term]
   APP                 : STATE [<Term,SnocList Term]
   TERM_OPEN           : STATE [<ByteBounds]
@@ -82,6 +87,7 @@ term : Term -> StateTrans STATE
 term x LAMBDA_DOT (sx:>st:<b:<v:<bt) = term (TLam b v bt x) st sx
 term x APP        (sx:>st:<y:<ys)    = term (appSnoc y (ys:<x)) st sx
 term x ELSE       (sx:>st:<b:<i:<t)  = term (tif b i t x) st sx
+term x LET_IN     (sx:>st:<b:<v:<s)  = term (TLet (b <+> cast x) v s x) st sx
 term x st         sx                 = sx:>st:<x:>TERM
 
 endTerm : StateTrans STATE
@@ -124,6 +130,7 @@ export
 eq : StateTrans STATE
 eq TOP_FUNNAME  sx = sx:>DEFN_EQ
 eq RECORD_FIELD sx = sx:>RECORD_EQ
+eq LET_VAR      sx = sx:>LET_EQ
 eq st           sx = err st sx
 
 export
@@ -182,8 +189,20 @@ else' st sx =
     _                 => err st sx
 
 export
+in' : StateTrans STATE
+in' st sx =
+  case endTerm st sx of
+    sy:>LET_EQ:<t:>TERM => sy:<t:>LET_IN
+    _                   => err st sx
+
+export
+let' : ByteBounds -> StateTrans STATE
+let' b st sx = sx:>st:<b:>LET
+
+export
 var : ByteBounded VarName -> StateTrans STATE
 var v LAMBDA             sx = sx:<NM v.val:>LAMBDA_VAR
+var v LET                sx = sx:<NM v.val:>LET_VAR
 var v TOP                sx = sx:<v:>TOP_FUNNAME
 var v RECORD             sx = sx:<v.val:>RECORD_FIELD
 var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
@@ -194,6 +213,7 @@ var v st                 sx = atom (TVar v.bounds v.val) st sx
 export
 placeholder : StateTrans STATE
 placeholder LAMBDA sx = sx:<PH:>LAMBDA_VAR
+placeholder LET    sx = sx:<PH:>LET_VAR
 placeholder st     sx = err st sx
 
 export
