@@ -97,7 +97,6 @@ term = go 5
         , (2, [| TIf  bb (go k) (go k) (go k) |])
         , (2, [| TLam bb bindname tpe (go k) |])
         , (2, [| TLet bb bindname (go k) (go k) |])
-        , (2, [| TLetrec bb bindname tpe (go k) (go k) |])
         , (2, [| TField bb (go k) (bounded varname) |])
         , (2, rec k)
         ]

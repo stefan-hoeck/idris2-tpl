@@ -117,6 +117,14 @@ example =
         }
       );
 
+  evenOddLR : EvenOdd;
+  evenOddLR =
+    letrec io : EvenOdd =
+      { iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n)
+      , isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
+      }
+    in io;
+
   %eval
    let x = factorial 3 in
    let y = factorial 5 in
@@ -143,6 +151,7 @@ example =
           }
       };
   %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
+  %eval evenOddLR.isodd {fst = factorial 5, snd = False}.fst;
   """
 
 unclosedTypeParen : String
