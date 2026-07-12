@@ -117,6 +117,13 @@ example =
         }
       );
 
+  %eval
+   let x = factorial 3 in
+   let y = factorial 5 in
+   let z = times x x   in
+     times y z;
+
+
   %alias BoolNat : {bool: Bool, nat: Nat};
   %alias Complex : {fst: Nat, snd: BoolNat};
 
