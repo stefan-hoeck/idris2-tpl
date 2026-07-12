@@ -54,6 +54,8 @@ vars =
      step "if" (bounds >>= dtrans . if')
   :: step "then" (dtrans then')
   :: step "else" (dtrans else')
+  :: step "let" (bounds >>= dtrans . let')
+  :: step "in" (dtrans in')
   :: varName (dtrans . var)
 
 atoms : Steps q PSz SK
@@ -127,6 +129,11 @@ ptrans =
     , entry LAMBDA_COLON      typeAtoms
     , entry LAMBDA_DOT        terms
 
+    , entry LET               $ spaced (step '_' (dtrans placeholder) :: vars)
+    , entry LET_VAR           $ spaced [step '=' (dtrans eq)]
+    , entry LET_EQ            terms
+    , entry LET_IN            terms
+
     , entry APP               atomOrClose
     , entry TERM_OPEN         terms
     , entry SEQ               terms
@@ -176,6 +183,10 @@ inBoundsSTATE LAMBDA            = Refl
 inBoundsSTATE LAMBDA_VAR        = Refl
 inBoundsSTATE LAMBDA_COLON      = Refl
 inBoundsSTATE LAMBDA_DOT        = Refl
+inBoundsSTATE LET               = Refl
+inBoundsSTATE LET_VAR           = Refl
+inBoundsSTATE LET_EQ            = Refl
+inBoundsSTATE LET_IN            = Refl
 inBoundsSTATE TERM              = Refl
 inBoundsSTATE APP               = Refl
 inBoundsSTATE TERM_OPEN         = Refl
