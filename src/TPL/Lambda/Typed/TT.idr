@@ -233,6 +233,8 @@ parameters (env : Env Entry)
             Right (SLam b v eat sscope)
       _ => unexpFunErr b t
 
+  typecheckAs t (TLet b v x scope)   = unsupported b
+
   typecheckAs t (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
     sarg <- typecheckAs (TFun t t) arg
     Right (SFix b2 sarg)
@@ -277,6 +279,8 @@ parameters (env : Env Entry)
     tp              <- resolveTpe rt
     (res ** sscope) <- typecheck scope
     Right (TFun tp res ** SLam b v tp sscope)
+
+  typecheck (TLet b v rt scope) = unsupported b
 
   typecheck (TApp b fun arg)   = Prelude.do
     (TFun at rt ** sfun) <- typecheck fun | (t ** _) => funErr fun t

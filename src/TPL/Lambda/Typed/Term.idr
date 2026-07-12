@@ -33,6 +33,9 @@ data Term : Type where
   ||| Abstraction: A bound variable, its type, and its scope
   TLam   : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (sc : Term) -> Term
 
+  ||| Let binding
+  TLet   : ByteBounds -> (v : BindName) -> (x : Term) -> (sc : Term) -> Term
+
   ||| Function application
   TApp   : ByteBounds -> (t,s : Term) -> Term
 
@@ -57,24 +60,26 @@ FromString Term where fromString = TVar NoBB . fromString
 
 export
 Cast Term ByteBounds where
-  cast (TVar x _)     = x
-  cast (TField x _ _) = x
-  cast (TLam x _ _ _) = x
-  cast (TApp x _ _)   = x
-  cast (TPrim x _)    = x
-  cast (TRec x _)     = x
-  cast (TIf x _ _ _)  = x
+  cast (TVar b _)     = b
+  cast (TField b _ _) = b
+  cast (TLam b _ _ _) = b
+  cast (TLet b _ _ _) = b
+  cast (TApp b _ _)   = b
+  cast (TPrim b _)    = b
+  cast (TRec b _)     = b
+  cast (TIf b _ _ _)  = b
 
 export
 MapBounds Term where
-  mapBounds f (TVar x v)      = TVar (f x) v
-  mapBounds f (TField x t v)  = TField (f x) (mapBounds f t) (mapBounds f v)
-  mapBounds f (TLam x v t sc) = TLam (f x) v (mapBounds f t) (mapBounds f sc)
-  mapBounds f (TApp x t s)    = TApp (f x) (mapBounds f t) (mapBounds f s)
-  mapBounds f (TPrim x y)     = TPrim (f x) y
-  mapBounds f (TRec x y)      = assert_total $ TRec (f x) (map (mapBounds f) <$> y)
-  mapBounds f (TIf x i t e)   =
-    TIf (f x) (mapBounds f i) (mapBounds f t) (mapBounds f e)
+  mapBounds f (TVar b v)      = TVar (f b) v
+  mapBounds f (TField b t v)  = TField (f b) (mapBounds f t) (mapBounds f v)
+  mapBounds f (TLam b v t sc) = TLam (f b) v (mapBounds f t) (mapBounds f sc)
+  mapBounds f (TLet b v x sc) = TLet (f b) v (mapBounds f x) (mapBounds f sc)
+  mapBounds f (TApp b t s)    = TApp (f b) (mapBounds f t) (mapBounds f s)
+  mapBounds f (TPrim b y)     = TPrim (f b) y
+  mapBounds f (TRec b y)      = assert_total $ TRec (f b) (map (mapBounds f) <$> y)
+  mapBounds f (TIf b i t e)   =
+    TIf (f b) (mapBounds f i) (mapBounds f t) (mapBounds f e)
 
 export
 nat : ByteBounds -> Nat -> Term
@@ -130,6 +135,7 @@ pretty : Term -> String
 pretty (TVar _ v)      = v.name
 pretty (TField _ t v)  = "\{paren t}.\{v.val}"
 pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
+pretty (TLet _ v x sc) = "let \{v} = \{pretty x} in \{pretty sc}"
 pretty (TApp _ t s)    = "\{appL t} \{paren s}"
 pretty (TPrim _ p)     = interpolate p
 pretty (TRec _ p)      = "{\{prettyFields [<] p}}"
