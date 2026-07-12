@@ -36,6 +36,9 @@ data Term : Type where
   ||| Let binding
   TLet   : ByteBounds -> (v : BindName) -> (x : Term) -> (sc : Term) -> Term
 
+  ||| Recursive let binding
+  TLetrec : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (x : Term) -> (sc : Term) -> Term
+
   ||| Function application
   TApp   : ByteBounds -> (t,s : Term) -> Term
 
@@ -60,25 +63,27 @@ FromString Term where fromString = TVar NoBB . fromString
 
 export
 Cast Term ByteBounds where
-  cast (TVar b _)     = b
-  cast (TField b _ _) = b
-  cast (TLam b _ _ _) = b
-  cast (TLet b _ _ _) = b
-  cast (TApp b _ _)   = b
-  cast (TPrim b _)    = b
-  cast (TRec b _)     = b
-  cast (TIf b _ _ _)  = b
+  cast (TVar b _)          = b
+  cast (TField b _ _)      = b
+  cast (TLam b _ _ _)      = b
+  cast (TLet b _ _ _)      = b
+  cast (TLetrec b _ _ _ _) = b
+  cast (TApp b _ _)        = b
+  cast (TPrim b _)         = b
+  cast (TRec b _)          = b
+  cast (TIf b _ _ _)       = b
 
 export
 MapBounds Term where
-  mapBounds f (TVar b v)      = TVar (f b) v
-  mapBounds f (TField b t v)  = TField (f b) (mapBounds f t) (mapBounds f v)
-  mapBounds f (TLam b v t sc) = TLam (f b) v (mapBounds f t) (mapBounds f sc)
-  mapBounds f (TLet b v x sc) = TLet (f b) v (mapBounds f x) (mapBounds f sc)
-  mapBounds f (TApp b t s)    = TApp (f b) (mapBounds f t) (mapBounds f s)
-  mapBounds f (TPrim b y)     = TPrim (f b) y
-  mapBounds f (TRec b y)      = assert_total $ TRec (f b) (map (mapBounds f) <$> y)
-  mapBounds f (TIf b i t e)   =
+  mapBounds f (TVar b v)            = TVar (f b) v
+  mapBounds f (TField b t v)        = TField (f b) (mapBounds f t) (mapBounds f v)
+  mapBounds f (TLam b v t sc)       = TLam (f b) v (mapBounds f t) (mapBounds f sc)
+  mapBounds f (TLet b v x sc)       = TLet (f b) v (mapBounds f x) (mapBounds f sc)
+  mapBounds f (TLetrec b v t x sc)  = TLetrec (f b) v (mapBounds f t) (mapBounds f x) (mapBounds f sc)
+  mapBounds f (TApp b t s)          = TApp (f b) (mapBounds f t) (mapBounds f s)
+  mapBounds f (TPrim b y)           = TPrim (f b) y
+  mapBounds f (TRec b y)            = assert_total $ TRec (f b) (map (mapBounds f) <$> y)
+  mapBounds f (TIf b i t e)         =
     TIf (f b) (mapBounds f i) (mapBounds f t) (mapBounds f e)
 
 export
@@ -132,14 +137,15 @@ paren : Term -> String
 prettyFields : SnocList String -> List (VarName,Term) -> String
 
 pretty : Term -> String
-pretty (TVar _ v)      = v.name
-pretty (TField _ t v)  = "\{paren t}.\{v.val}"
-pretty (TLam _ v t sc) = "λ\{v}: \{t}. \{pretty sc}"
-pretty (TLet _ v x sc) = "let \{v} = \{pretty x} in \{pretty sc}"
-pretty (TApp _ t s)    = "\{appL t} \{paren s}"
-pretty (TPrim _ p)     = interpolate p
-pretty (TRec _ p)      = "{\{prettyFields [<] p}}"
-pretty (TIf _ i t e)   = "if \{pretty i} then \{pretty t} else \{pretty e}"
+pretty (TVar _ v)           = v.name
+pretty (TField _ t v)       = "\{paren t}.\{v.val}"
+pretty (TLam _ v t sc)      = "λ\{v}: \{t}. \{pretty sc}"
+pretty (TLet _ v x sc)      = "let \{v} = \{pretty x} in \{pretty sc}"
+pretty (TLetrec _ v t x sc) = "letrec \{v}: \{t} = \{pretty x} in \{pretty sc}"
+pretty (TApp _ t s)         = "\{appL t} \{paren s}"
+pretty (TPrim _ p)          = interpolate p
+pretty (TRec _ p)           = "{\{prettyFields [<] p}}"
+pretty (TIf _ i t e)        = "if \{pretty i} then \{pretty t} else \{pretty e}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"
 
