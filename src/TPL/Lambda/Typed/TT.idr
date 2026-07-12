@@ -163,13 +163,18 @@ Embeddable TTVar (STerm t) where embed = embedImpl
 -- Type Checking
 --------------------------------------------------------------------------------
 
+0 TCRes : Maybe Tpe -> Scoped TTVar
+TCRes Nothing  sc = (t ** STerm t sc)
+TCRes (Just t) sc = STerm t sc
+
 check :
      {found : _}
-  -> (exp : Tpe)
+  -> (m     : Maybe Tpe)
   -> ByteBounds
   -> STerm found sc
-  -> Either LamErr (STerm exp sc)
-check exp bb t =
+  -> Either LamErr (TCRes m sc)
+check Nothing    bb t = Right (_ ** t)
+check (Just exp) bb t =
   case hdecEq exp found of
     Just0 prf => Right (rewrite prf in t)
     Nothing0  => typeErr bb exp found
@@ -198,109 +203,90 @@ parameters (env : Env Entry)
       Left x  => Left x
       Right x => resolvePairs (sp:<(v,x)) ps
 
-  export
-  typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
+  tc : {sc : _} -> (m : Maybe Tpe) -> Term -> Either LamErr (TCRes m sc)
 
   tcrec : {sc : _} -> List (VarName,Term) -> Either LamErr (ps ** SRecord ps sc)
   tcrec []          = Right (_ ** [])
   tcrec ((v,t)::ps) = Prelude.do
-    (ht ** h) <- typecheck t
+    (ht ** h) <- tc Nothing t
     (tt ** pt) <- tcrec ps
     Right (_ ** ((v,h)::pt))
 
-  export
-  typecheckAs : {sc : _} -> (t : Tpe) -> Term -> Either LamErr (STerm t sc)
-  typecheckAs t (TVar b v) =
+  tc m (TVar b v)     =
     case findNVar ((NM v ==) . name) sc of
-      Just (V (NM n) tp ** nv) => check t b (SVar b nv)
+      Just (V (NM n) tp ** nv) => check m b (SVar b nv)
       _                        => case lookup v env of
-        Just (Def _ ct) => check t b (embed ct)
+        Just (Def _ ct) => check m b (embed ct)
         _               => bindErr b v
 
-  typecheckAs t (TField b x v) = Prelude.do
-    (TRec ps ** x2) <- typecheck x | (t ** _) => notField v t
+  tc m (TField b x v) = Prelude.do
+    (TRec ps ** x2) <- tc Nothing x | (t ** _) => notField v t
     case isField v.val ps of
-      Just (s ** prf) => check t b (SField b v prf x2)
+      Just (s ** prf) => check m b (SField b v prf x2)
       Nothing         => notField v (TRec ps)
 
-  typecheckAs t (TLam b v rt scope)   = Prelude.do
-    tpe <- resolveTpe rt
-    case t of
-      TFun eat ert => case hdecEq eat tpe of
-        Nothing0 => typeErr rt eat tpe
+  tc m (TLam b v rt scope) = Prelude.do
+    tp <- resolveTpe rt
+    case m of
+      Just (TFun eat ert) => case hdecEq eat tp of
+        Nothing0 => typeErr rt eat tp
         Just0 _  => Prelude.do
-            sscope <- typecheckAs ert scope
+            sscope <- tc (Just ert) scope
             Right (SLam b v eat sscope)
-      _ => unexpFunErr b t
+      Just t              => unexpFunErr b t
+      Nothing             => Prelude.do
+        (res ** sscope) <- tc Nothing scope
+        Right (TFun tp res ** SLam b v tp sscope)
 
-  typecheckAs t (TLet b v rt scope) = Prelude.do
-    (targ ** arg) <- typecheck rt
-    (tscp ** scp) <- typecheck scope
-    check t b (SApp b (SLam NoBB v targ scp) arg)
+  tc m (TLet b v rt scope) = Prelude.do
+    (targ ** arg) <- tc Nothing rt
+    (tscp ** scp) <- tc Nothing scope
+    check m b (SApp b (SLam NoBB v targ scp) arg)
 
-  typecheckAs t (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
-    sarg <- typecheckAs (TFun t t) arg
-    Right (SFix b2 sarg)
+  tc m (TApp b (TVar b2 (VN "fix")) arg)   =
+    case m of
+      Just t => Prelude.do
+        sarg <- tc (Just $ TFun t t) arg
+        Right (SFix b2 sarg)
+      Nothing => Prelude.do
+        (TFun s t ** sarg) <- tc Nothing arg | (t ** _) => funErr arg t
+        case hdecEq s t of
+          Nothing0 => typeErr arg s t
+          Just0 p  => Right (_ ** SFix b2 $ fun p sarg)
 
-  typecheckAs t (TApp b fun arg) = Prelude.do
-    (ta ** sarg) <- typecheck arg
-    sfun <- typecheckAs (TFun ta t) fun
-    Right (SApp b sfun sarg)
+  tc m (TApp b fun arg) =
+    case m of
+      Just t => Prelude.do
+        (ta ** sarg) <- tc Nothing arg
+        sfun <- tc (Just $ TFun ta t) fun
+        Right (SApp b sfun sarg)
+      Nothing => Prelude.do
+        (TFun at rt ** sfun) <- tc Nothing fun | (t ** _) => funErr fun t
+        sarg <- tc (Just at) arg
+        Right (rt ** SApp b sfun sarg)
 
-  typecheckAs t (TPrim b y)    = check t b (SPrim b y)
+  tc m (TPrim b y)    = check m b (SPrim b y)
 
-  typecheckAs t (TRec b y)     = Prelude.do
+  tc m (TRec b y)    = Prelude.do
     (ps ** r) <- tcrec y
-    check t b (SRec b r)
+    check m b (SRec b r)
 
-  typecheckAs t (TIf b i y e)  = Prelude.do
-    si <- typecheckAs TBool i
-    sy <- typecheckAs t y
-    se <- typecheckAs t e
-    Right (SIf b si sy se)
+  tc m (TIf b i y e)  = Prelude.do
+    si <- tc {sc} (Just TBool) i
+    case m of
+      Just t => Prelude.do
+        sy <- tc (Just t) y
+        se <- tc (Just t) e
+        Right (SIf b si sy se)
+      Nothing => Prelude.do
+        (t ** sy) <- tc Nothing y
+        se        <- tc (Just t) e
+        Right (t ** SIf b si sy se)
 
-  typecheck (TVar b v)     =
-    case findNVar ((NM v ==) . name) sc of
-      Just (V (NM n) tp ** nv) => Right (_ ** SVar b nv)
-      _                        => case lookup v env of
-        Just (Def _ ct) => Right (_ ** embed ct)
-        _               => bindErr b v
+  export %inline
+  typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
+  typecheck = tc Nothing
 
-  typecheck (TField b x v) = Prelude.do
-    (TRec ps ** x2) <- typecheck x | (t ** _) => notField v t
-    case isField v.val ps of
-      Just (t ** prf) => Right (t ** SField b v prf x2)
-      Nothing         => notField v (TRec ps)
-
-  typecheck (TApp b (TVar b2 (VN "fix")) arg) = Prelude.do
-    (TFun s t ** sarg) <- typecheck arg | (t ** _) => funErr arg t
-    case hdecEq s t of
-      Nothing0 => typeErr arg s t
-      Just0 p  => Right (_ ** SFix b2 $ fun p sarg)
-
-  typecheck (TLam b v rt scope) = Prelude.do
-    tp              <- resolveTpe rt
-    (res ** sscope) <- typecheck scope
-    Right (TFun tp res ** SLam b v tp sscope)
-
-  typecheck (TLet b v rt scope) = Prelude.do
-    (targ ** arg) <- typecheck rt
-    (tscp ** scp) <- typecheck scope
-    Right (tscp ** SApp b (SLam NoBB v targ scp) arg)
-
-  typecheck (TApp b fun arg)   = Prelude.do
-    (TFun at rt ** sfun) <- typecheck fun | (t ** _) => funErr fun t
-    sarg <- typecheckAs at arg
-    Right (rt ** SApp b sfun sarg)
-
-  typecheck (TPrim b y)    = Right (_ ** SPrim b y)
-
-  typecheck (TRec b y)     = Prelude.do
-    (ps ** r) <- tcrec y
-    Right (_ ** SRec b r)
-
-  typecheck (TIf b i y e)  = Prelude.do
-    si        <- typecheckAs TBool i
-    (t ** sy) <- typecheck y
-    se        <- typecheckAs t e
-    Right (t ** SIf b si sy se)
+  export %inline
+  typecheckAs : {sc : _} -> (t : Tpe) -> Term -> Either LamErr (STerm t sc)
+  typecheckAs t = tc (Just t)
