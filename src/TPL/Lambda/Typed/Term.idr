@@ -36,9 +36,6 @@ data Term : Type where
   ||| Let binding
   TLet   : ByteBounds -> (v : BindName) -> (x : Term) -> (sc : Term) -> Term
 
-  ||| Recursive let binding
-  TLetrec : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (x : Term) -> (sc : Term) -> Term
-
   ||| Function application
   TApp   : ByteBounds -> (t,s : Term) -> Term
 
@@ -67,7 +64,6 @@ Cast Term ByteBounds where
   cast (TField b _ _)      = b
   cast (TLam b _ _ _)      = b
   cast (TLet b _ _ _)      = b
-  cast (TLetrec b _ _ _ _) = b
   cast (TApp b _ _)        = b
   cast (TPrim b _)         = b
   cast (TRec b _)          = b
@@ -79,7 +75,6 @@ MapBounds Term where
   mapBounds f (TField b t v)        = TField (f b) (mapBounds f t) (mapBounds f v)
   mapBounds f (TLam b v t sc)       = TLam (f b) v (mapBounds f t) (mapBounds f sc)
   mapBounds f (TLet b v x sc)       = TLet (f b) v (mapBounds f x) (mapBounds f sc)
-  mapBounds f (TLetrec b v t x sc)  = TLetrec (f b) v (mapBounds f t) (mapBounds f x) (mapBounds f sc)
   mapBounds f (TApp b t s)          = TApp (f b) (mapBounds f t) (mapBounds f s)
   mapBounds f (TPrim b y)           = TPrim (f b) y
   mapBounds f (TRec b y)            = assert_total $ TRec (f b) (map (mapBounds f) <$> y)
@@ -119,6 +114,11 @@ export %inline
 tif : ByteBounds -> Term -> Term -> Term -> Term
 tif b i t e = TIf (b <+> cast e) i t e
 
+export
+letrec : ByteBounds -> BindName -> RawTpe -> Term -> Term -> Term
+letrec b v t val scope =
+  TLet b v (TApp b (TVar NoBB "fix") (TLam NoBB v t val)) scope
+
 --------------------------------------------------------------------------------
 -- Pretty Printing
 --------------------------------------------------------------------------------
@@ -141,7 +141,6 @@ pretty (TVar _ v)           = v.name
 pretty (TField _ t v)       = "\{paren t}.\{v.val}"
 pretty (TLam _ v t sc)      = "λ\{v}: \{t}. \{pretty sc}"
 pretty (TLet _ v x sc)      = "let \{v} = \{pretty x} in \{pretty sc}"
-pretty (TLetrec _ v t x sc) = "letrec \{v}: \{t} = \{pretty x} in \{pretty sc}"
 pretty (TApp _ t s)         = "\{appL t} \{paren s}"
 pretty (TPrim _ p)          = interpolate p
 pretty (TRec _ p)           = "{\{prettyFields [<] p}}"
