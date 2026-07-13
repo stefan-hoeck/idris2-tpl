@@ -61,6 +61,31 @@ Cast Term ByteBounds where
   cast (TRec b _)          = b
   cast (TIf b _ _ _)       = b
 
+unpats :
+     SnocList (BindName,Term)
+  -> Nat
+  -> List (ByteBounded VarName,Pattern)
+  -> Term
+  -> (Nat, List (BindName, Term))
+
+unpat : Nat -> Pattern -> Term -> (Nat, List (BindName, Term))
+unpat n (PV x)  t = (n, [(x,t)])
+unpat n (PT xs) t =
+ let vn     := VN "$\{show n}"
+     (r,ps) := unpats [<] (S n) xs (TVar NoBB vn)
+  in (r, (NM vn, t) :: ps)
+
+unpats sp n []           t = (n, sp <>> [])
+unpats sp n ((vn,p)::ps) t =
+ let fn := TField NoBB t vn
+     (n2,xs) := unpat n p fn
+  in unpats (sp<><xs) n2 ps t
+
+unpatLet : ByteBounds -> List (BindName,Term) -> Term -> Term
+unpatLet bb []             x = x
+unpatLet bb ((bn,t) :: ps) x = TLet bb bn t (unpatLet NoBB ps x)
+
+
 desugarRec : List (VarName,PTerm) -> List (VarName,Term)
 
 export
@@ -68,7 +93,9 @@ desugar : PTerm -> Term
 desugar (PVar b v)           = TVar b v
 desugar (PField b y v)       = TField b (desugar y) v
 desugar (PLam b v t sc)      = TLam b v t (desugar sc)
-desugar (PLet b v y sc)      = TLet b v (desugar y) (desugar sc)
+desugar (PLet b p y sc)      =
+ let (_,ps) := unpat 0 p (desugar y)
+  in unpatLet b ps (desugar sc)
 desugar (PLetrec b v t y sc) = TLetrec b v t (desugar y) (desugar sc)
 desugar (PApp b t s)         = TApp b (desugar t) (desugar s)
 desugar (PPrim b y)          = TPrim b y
@@ -85,7 +112,7 @@ resugar : Term -> PTerm
 resugar (TVar b v)           = PVar b v
 resugar (TField b y v)       = PField b (resugar y) v
 resugar (TLam b v t sc)      = PLam b v t (resugar sc)
-resugar (TLet b v y sc)      = PLet b v (resugar y) (resugar sc)
+resugar (TLet b p y sc)      = PLet b (PV p) (resugar y) (resugar sc)
 resugar (TLetrec b v t y sc) = PLetrec b v t (resugar y) (resugar sc)
 resugar (TApp b t s)         = PApp b (resugar t) (resugar s)
 resugar (TPrim b y)          = PPrim b y

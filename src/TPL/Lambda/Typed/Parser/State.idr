@@ -93,7 +93,7 @@ term : PTerm -> StateTrans STATE
 term x LAMBDA_DOT (sx:>st:<b:<v:<bt)   = term (PLam b v bt x) st sx
 term x APP        (sx:>st:<y:<ys)      = term (appSnoc y (ys:<x)) st sx
 term x ELSE       (sx:>st:<b:<i:<t)    = term (tif b i t x) st sx
-term x LET_IN     (sx:>st:<b:<v:<s)    = term (PLet (b <+> cast x) v s x) st sx
+term x LET_IN     (sx:>st:<b:<v:<s)    = term (PLet (b <+> cast x) (PV v) s x) st sx
 term x LETREC_IN  (sx:>st:<b:<v:<t:<s) = term (PLetrec (b <+> cast x) v t s x) st sx
 term x st         sx                   = sx:>st:<x:>TERM
 
