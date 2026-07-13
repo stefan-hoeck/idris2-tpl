@@ -49,13 +49,13 @@ process env (Defn bb nm trm) =
     Just (Dec t)  =>
       map
         (\v => (insert nm (Def t v) env, Nothing))
-        (typecheckAs {sc = [<]} env t trm)
+        (typecheckAs {sc = [<]} env t (desugar trm))
     Just _   => defined bb nm
     Nothing  => unknown bb nm
 process env (Eval x)   =
   map
     (\(t ** v) => (env, Just "Type: \{t}, Value: \{eval [<] v}"))
-    (typecheck {sc = [<]} env x)
+    (typecheck {sc = [<]} env (desugar x))
 
 covering
 processIO : IORef (Env Entry) -> String -> Declaration -> IO ()
@@ -82,43 +82,31 @@ example =
 
   plus : Nat -> Nat -> Nat;
   plus =
-    fix
-      ( λrec : Nat -> Nat -> Nat
-      . λm   : Nat
-      . λn   : Nat
-      . if iszero m then n else rec (pred m) (succ n)
-      );
+    letrec f : Nat -> Nat -> Nat =
+      λm   : Nat .
+      λn   : Nat .
+      if iszero m then n else f (pred m) (succ n)
+    in f;
 
   times : Nat -> Nat -> Nat;
   times =
-    fix
-      ( λrec : Nat -> Nat -> Nat
-      . λm   : Nat
-      . λn   : Nat
-      . if iszero m then 0 else plus n (rec (pred m) n)
-      );
+    letrec f : Nat -> Nat -> Nat =
+      λm : Nat .
+      λn : Nat .
+      if iszero m then 0 else plus n (f (pred m) n)
+    in f;
 
   factorial : Nat -> Nat;
   factorial =
-    fix
-      ( λrec : Nat->Nat
-      . λn   : Nat
-      . if iszero n then 1 else times (rec (pred n)) n
-      );
+    letrec f : Nat -> Nat =
+      λn : Nat .
+      if iszero n then 1 else times (f (pred n)) n
+    in f;
 
   %alias EvenOdd : {iseven : Nat -> Bool, isodd : Nat -> Bool};
 
   evenOdd : EvenOdd;
   evenOdd =
-    fix
-      ( λio : EvenOdd
-      . { iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n)
-        , isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
-        }
-      );
-
-  evenOddLR : EvenOdd;
-  evenOddLR =
     letrec io : EvenOdd =
       { iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n)
       , isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
@@ -151,7 +139,6 @@ example =
           }
       };
   %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
-  %eval evenOddLR.isodd {fst = factorial 5, snd = False}.fst;
   """
 
 unclosedTypeParen : String

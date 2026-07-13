@@ -50,6 +50,15 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
   SPred  : ByteBounds -> STerm TNat sc -> STerm TNat sc
   SIsZ   : ByteBounds -> STerm TNat sc -> STerm TBool sc
 
+fix :
+     ByteBounds
+  -> (t : Tpe)
+  -> (v : BindName)
+  -> (x : STerm t (sc:<V v t))
+  -> (y : STerm s (sc:<V v t))
+  -> STerm s sc
+fix b t v x y = SApp b (SLam NoBB v t y) (SFix NoBB (SLam NoBB v t x))
+
 data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type where
   Nil  : SRecord [] sc
   (::) : (p : (VarName,STerm t sc)) -> SRecord ps sc -> SRecord ((fst p, t) :: ps) sc
@@ -243,16 +252,16 @@ parameters (env : Env Entry)
     (tscp ** scp) <- tc Nothing scope
     check m b (SApp b (SLam NoBB v targ scp) arg)
 
-  tc m (TApp b (TVar b2 (VN "fix")) arg)   =
+  tc m (TLetrec b v rt x scope)   = Prelude.do
+    tp <- resolveTpe rt
+    tx <- tc {sc = sc:<V v tp} (Just tp) x
     case m of
       Just t => Prelude.do
-        sarg <- tc (Just $ TFun t t) arg
-        Right (SFix b2 sarg)
+        ts <- tc m scope
+        pure $ fix b tp v tx ts
       Nothing => Prelude.do
-        (TFun s t ** sarg) <- tc Nothing arg | (t ** _) => funErr arg t
-        case hdecEq s t of
-          Nothing0 => typeErr arg s t
-          Just0 p  => Right (_ ** SFix b2 $ fun p sarg)
+        (t ** ts) <- tc m scope
+        pure $ (t ** fix b tp v tx ts)
 
   tc m (TApp b fun arg) =
     case m of

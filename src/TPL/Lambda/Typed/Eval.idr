@@ -69,7 +69,7 @@ torec ((v,t)::ps) = (v,toTerm t) :: torec ps
 
 export
 Interpolation (Value t) where
-  interpolate = interpolate . toTerm
+  interpolate = interpolate . resugar . toTerm
 
 export
 fromPrim : (p : Prim) -> Value (PrimTpe p)

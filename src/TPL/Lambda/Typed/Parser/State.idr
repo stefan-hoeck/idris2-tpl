@@ -10,7 +10,7 @@ import public TPL.Lambda.Typed.Declaration
 
 public export
 0 RecField : Type
-RecField = (VarName,Term)
+RecField = (VarName,PTerm)
 
 public export
 0 RecTypeField : Type
@@ -38,18 +38,18 @@ data STATE : SnocList Type -> Type where
   LET                 : STATE [<ByteBounds]
   LET_VAR             : STATE [<ByteBounds,BindName]
   LET_EQ              : STATE [<ByteBounds,BindName]
-  LET_IN              : STATE [<ByteBounds,BindName,Term]
+  LET_IN              : STATE [<ByteBounds,BindName,PTerm]
 
   LETREC              : STATE [<ByteBounds]
   LETREC_VAR          : STATE [<ByteBounds,BindName]
   LETREC_COLON        : STATE [<ByteBounds,BindName]
   LETREC_EQ           : STATE [<ByteBounds,BindName,RawTpe]
-  LETREC_IN           : STATE [<ByteBounds,BindName,RawTpe,Term]
+  LETREC_IN           : STATE [<ByteBounds,BindName,RawTpe,PTerm]
 
-  TERM                : STATE [<Term]
-  APP                 : STATE [<Term,SnocList Term]
+  TERM                : STATE [<PTerm]
+  APP                 : STATE [<PTerm,SnocList PTerm]
   TERM_OPEN           : STATE [<ByteBounds]
-  SEQ                 : STATE [<ByteBounds,Term]
+  SEQ                 : STATE [<ByteBounds,PTerm]
 
   RECORD              : STATE [<ByteBounds,SnocList RecField]
   RECORD_FIELD        : STATE [<ByteBounds,SnocList RecField,VarName]
@@ -57,8 +57,8 @@ data STATE : SnocList Type -> Type where
   RECORD_COMMA        : STATE [<ByteBounds,SnocList RecField]
 
   IF                  : STATE [<ByteBounds]
-  THEN                : STATE [<ByteBounds,Term]
-  ELSE                : STATE [<ByteBounds,Term,Term]
+  THEN                : STATE [<ByteBounds,PTerm]
+  ELSE                : STATE [<ByteBounds,PTerm,PTerm]
 
   TYPE                : STATE [<RawTpe]
   TYPE_SEQ            : STATE [<SnocList RawTpe, RawTpe]
@@ -89,12 +89,12 @@ StateTrans s =
 err : StateTrans STATE
 err st sx = sx:>st:>ERR
 
-term : Term -> StateTrans STATE
-term x LAMBDA_DOT (sx:>st:<b:<v:<bt)   = term (TLam b v bt x) st sx
+term : PTerm -> StateTrans STATE
+term x LAMBDA_DOT (sx:>st:<b:<v:<bt)   = term (PLam b v bt x) st sx
 term x APP        (sx:>st:<y:<ys)      = term (appSnoc y (ys:<x)) st sx
 term x ELSE       (sx:>st:<b:<i:<t)    = term (tif b i t x) st sx
-term x LET_IN     (sx:>st:<b:<v:<s)    = term (TLet (b <+> cast x) v s x) st sx
-term x LETREC_IN  (sx:>st:<b:<v:<t:<s) = term (letrec (b <+> cast x) v t s x) st sx
+term x LET_IN     (sx:>st:<b:<v:<s)    = term (PLet (b <+> cast x) v s x) st sx
+term x LETREC_IN  (sx:>st:<b:<v:<t:<s) = term (PLetrec (b <+> cast x) v t s x) st sx
 term x st         sx                   = sx:>st:<x:>TERM
 
 endTerm : StateTrans STATE
@@ -154,7 +154,7 @@ dot TYPE_SEQ (sx:>LAMBDA_COLON:<ss:<s) = sx:<(tpeAppAll ss s):>LAMBDA_DOT
 dot st       sx                        = err st sx
 
 export
-atom : Term -> StateTrans STATE
+atom : PTerm -> StateTrans STATE
 atom x APP (sx:<y) = sx:<(y:<x):>APP
 atom x st  sx      = sx:>st:<x:<[<]:>APP
 
@@ -225,7 +225,7 @@ var v RECORD             sx = sx:<v.val:>RECORD_FIELD
 var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
 var v RECORD_TYPE        sx = sx:<v.val:>RECORD_TYPE_FIELD
 var v RECORD_TYPE_COMMA  sx = sx:<v.val:>RECORD_TYPE_FIELD
-var v st                 sx = atom (TVar v.bounds v.val) st sx
+var v st                 sx = atom (PVar v.bounds v.val) st sx
 
 export
 placeholder : StateTrans STATE
@@ -254,8 +254,8 @@ export
 projection : ByteBounded VarName -> StateTrans STATE
 projection b APP (sx:<t:<ss) =
   case ss of
-    i:<l => sx:<t:<(i:<TField (cast l <+> b.bounds) l b):>APP
-    [<]  => sx:<TField (cast t <+> b.bounds) t b:<[<]:>APP
+    i:<l => sx:<t:<(i:<PField (cast l <+> b.bounds) l b):>APP
+    [<]  => sx:<PField (cast t <+> b.bounds) t b:<[<]:>APP
 projection _ st sx = err st sx
 
 export
@@ -284,7 +284,7 @@ export
 closeRecord : ByteBounds -> StateTrans STATE
 closeRecord b2 st sx =
   case endRecordField st sx of
-    sx:>st:<b:<sp:>RECORD => atom (TRec (b<+>b2) (sp<>>[])) st sx
+    sx:>st:<b:<sp:>RECORD => atom (PRec (b<+>b2) (sp<>>[])) st sx
     _ => err st sx
 
 export
