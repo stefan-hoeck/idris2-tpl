@@ -42,6 +42,10 @@ bindname =
     ]
 
 export
+pattern : Gen Pattern
+pattern = PV <$> bindname
+
+export
 tpename : Gen VarName
 tpename = (VN . fastPack) <$> [| upper :: list (linear 0 6) identchar |]
 
@@ -96,7 +100,7 @@ term = go 5
         , (2, [| PApp bb (go k) (go k) |])
         , (2, [| PIf  bb (go k) (go k) (go k) |])
         , (2, [| PLam bb bindname tpe (go k) |])
-        , (2, [| PLet bb bindname (go k) (go k) |])
+        , (2, [| PLet bb pattern (go k) (go k) |])
         , (2, [| PLetrec bb bindname tpe (go k) (go k) |])
         , (2, [| PField bb (go k) (bounded varname) |])
         , (2, rec k)

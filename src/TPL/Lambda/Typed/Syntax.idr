@@ -8,6 +8,50 @@ import public TPL.Lambda.Typed.Type
 %default total
 %language ElabReflection
 
+--------------------------------------------------------------------------------
+-- Patterns
+--------------------------------------------------------------------------------
+
+public export
+data Pattern : Type where
+  PV : BindName -> Pattern
+  PT : List (ByteBounded VarName, Pattern) -> Pattern
+
+%runElab derive "Pattern" [Show,Eq]
+
+mapPatFields :
+     (ByteBounds -> ByteBounds)
+  -> List (ByteBounded VarName, Pattern)
+  -> List (ByteBounded VarName, Pattern)
+
+mapPatBounds : (ByteBounds -> ByteBounds) -> Pattern -> Pattern
+mapPatBounds f (PV x)  = PV x
+mapPatBounds f (PT xs) = PT $ mapPatFields f xs
+
+mapPatFields f [] = []
+mapPatFields f ((v,p)::ps) =
+  (mapBounds f v, mapPatBounds f p) :: mapPatFields f ps
+
+prettyPatFields : SnocList String -> List (ByteBounded VarName, Pattern) -> String
+
+prettyPat : Pattern -> String
+prettyPat (PV n)  = interpolate n
+prettyPat (PT ps) = "{\{prettyPatFields [<] ps}"
+
+prettyPatFields ss [] = fastConcat $ intersperse "," (ss <>> [])
+prettyPatFields ss ((v,p)::ps) =
+  prettyPatFields (ss:<"\{v.val}=\{prettyPat p}") ps
+
+export %inline
+Interpolation Pattern where interpolate = prettyPat
+
+export %inline
+MapBounds Pattern where mapBounds = mapPatBounds
+
+--------------------------------------------------------------------------------
+-- Primitives
+--------------------------------------------------------------------------------
+
 public export
 data Prim : Type where
   PNat  : Nat -> Prim
@@ -22,6 +66,10 @@ Interpolation Prim where
   interpolate (PBool v) = show v
   interpolate PUnit     = "unit"
 
+--------------------------------------------------------------------------------
+-- Parsed Terms
+--------------------------------------------------------------------------------
+
 ||| High-level syntax
 public export
 data PTerm : Type where
@@ -35,7 +83,7 @@ data PTerm : Type where
   PLam     : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (sc : PTerm) -> PTerm
 
   ||| Let binding
-  PLet     : ByteBounds -> (v : BindName) -> (x : PTerm) -> (sc : PTerm) -> PTerm
+  PLet     : ByteBounds -> Pattern -> (x : PTerm) -> (sc : PTerm) -> PTerm
 
   ||| Recursive let binding
   PLetrec  :
@@ -85,7 +133,7 @@ MapBounds PTerm where
   mapBounds f (PVar b v)            = PVar (f b) v
   mapBounds f (PField b t v)        = PField (f b) (mapBounds f t) (mapBounds f v)
   mapBounds f (PLam b v t sc)       = PLam (f b) v (mapBounds f t) (mapBounds f sc)
-  mapBounds f (PLet b v x sc)       = PLet (f b) v (mapBounds f x) (mapBounds f sc)
+  mapBounds f (PLet b v x sc)       = PLet (f b) (mapBounds f v) (mapBounds f x) (mapBounds f sc)
   mapBounds f (PLetrec b v t x sc)  = PLetrec (f b) v (mapBounds f t) (mapBounds f x) (mapBounds f sc)
   mapBounds f (PApp b t s)          = PApp (f b) (mapBounds f t) (mapBounds f s)
   mapBounds f (PPrim b y)           = PPrim (f b) y
