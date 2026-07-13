@@ -3,7 +3,7 @@ module TypedLambda.Gen
 import public Data.Vect
 import public Hedgehog
 import public TPL.Lambda.Typed.Declaration
-import public TPL.Lambda.Typed.Term
+import public TPL.Lambda.Typed.Syntax
 import public Text.ByteBounds
 
 %default total
@@ -71,33 +71,34 @@ tpe = go 5
         ]
 
 export
-prim : Gen Term
+prim : Gen PTerm
 prim =
   frequency
-    [ (1, pure (TPrim NoBB PUnit))
-    , (1, (TPrim NoBB . PBool) <$> bool)
-    , (3, (TPrim NoBB . PNat) <$> nat (linear 0 100))
-    , (3, TVar NoBB <$> varname)
+    [ (1, pure (PPrim NoBB PUnit))
+    , (1, (PPrim NoBB . PBool) <$> bool)
+    , (3, (PPrim NoBB . PNat) <$> nat (linear 0 100))
+    , (3, PVar NoBB <$> varname)
     ]
 
 export
-term : Gen Term
+term : Gen PTerm
 term = go 5
   where
-    go : Nat -> Gen Term
+    go : Nat -> Gen PTerm
 
-    rec : Nat -> Gen Term
-    rec k = TRec NoBB <$> list (linear 1 5) [| (varname, go k) |]
+    rec : Nat -> Gen PTerm
+    rec k = PRec NoBB <$> list (linear 1 5) [| (varname, go k) |]
 
     go 0     = prim
     go (S k) =
       frequency
         [ (1, prim)
-        , (2, [| TApp bb (go k) (go k) |])
-        , (2, [| TIf  bb (go k) (go k) (go k) |])
-        , (2, [| TLam bb bindname tpe (go k) |])
-        , (2, [| TLet bb bindname (go k) (go k) |])
-        , (2, [| TField bb (go k) (bounded varname) |])
+        , (2, [| PApp bb (go k) (go k) |])
+        , (2, [| PIf  bb (go k) (go k) (go k) |])
+        , (2, [| PLam bb bindname tpe (go k) |])
+        , (2, [| PLet bb bindname (go k) (go k) |])
+        , (2, [| PLetrec bb bindname tpe (go k) (go k) |])
+        , (2, [| PField bb (go k) (bounded varname) |])
         , (2, rec k)
         ]
 

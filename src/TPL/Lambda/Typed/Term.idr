@@ -1,27 +1,12 @@
 module TPL.Lambda.Typed.Term
 
 import Derive.Prelude
-import public TPL.Env
-import public TPL.Name.Var
-import public TPL.Lambda.Typed.Type
+import public TPL.Lambda.Typed.Syntax
 
 %default total
 %language ElabReflection
 
-public export
-data Prim : Type where
-  PNat  : Nat -> Prim
-  PBool : Bool -> Prim
-  PUnit : Prim
-
-%runElab derive "Prim" [Show,Eq]
-
-export
-Interpolation Prim where
-  interpolate (PNat v)  = show v
-  interpolate (PBool v) = show v
-  interpolate PUnit     = "unit"
-
+||| Desugared terms
 public export
 data Term : Type where
   ||| Variables
@@ -35,6 +20,15 @@ data Term : Type where
 
   ||| Let binding
   TLet   : ByteBounds -> (v : BindName) -> (x : Term) -> (sc : Term) -> Term
+
+  ||| Recursive let binding
+  TLetrec :
+       ByteBounds
+    -> (v : BindName)
+    -> (t : RawTpe)
+    -> (x : Term)
+    -> (sc : Term)
+    -> Term
 
   ||| Function application
   TApp   : ByteBounds -> (t,s : Term) -> Term
@@ -51,12 +45,9 @@ data Term : Type where
 
 %runElab derive "Term" [Show,Eq]
 
-public export %inline
-FromString Term where fromString = TVar NoBB . fromString
-
---------------------------------------------------------------------------------
--- Utilities
---------------------------------------------------------------------------------
+export
+FromString Term where
+  fromString s = TVar NoBB (fromString s)
 
 export
 Cast Term ByteBounds where
@@ -64,95 +55,42 @@ Cast Term ByteBounds where
   cast (TField b _ _)      = b
   cast (TLam b _ _ _)      = b
   cast (TLet b _ _ _)      = b
+  cast (TLetrec b _ _ _ _) = b
   cast (TApp b _ _)        = b
   cast (TPrim b _)         = b
   cast (TRec b _)          = b
   cast (TIf b _ _ _)       = b
 
-export
-MapBounds Term where
-  mapBounds f (TVar b v)            = TVar (f b) v
-  mapBounds f (TField b t v)        = TField (f b) (mapBounds f t) (mapBounds f v)
-  mapBounds f (TLam b v t sc)       = TLam (f b) v (mapBounds f t) (mapBounds f sc)
-  mapBounds f (TLet b v x sc)       = TLet (f b) v (mapBounds f x) (mapBounds f sc)
-  mapBounds f (TApp b t s)          = TApp (f b) (mapBounds f t) (mapBounds f s)
-  mapBounds f (TPrim b y)           = TPrim (f b) y
-  mapBounds f (TRec b y)            = assert_total $ TRec (f b) (map (mapBounds f) <$> y)
-  mapBounds f (TIf b i t e)         =
-    TIf (f b) (mapBounds f i) (mapBounds f t) (mapBounds f e)
+desugarRec : List (VarName,PTerm) -> List (VarName,Term)
 
 export
-nat : ByteBounds -> Nat -> Term
-nat bb n = TPrim bb (PNat n)
+desugar : PTerm -> Term
+desugar (PVar b v)           = TVar b v
+desugar (PField b y v)       = TField b (desugar y) v
+desugar (PLam b v t sc)      = TLam b v t (desugar sc)
+desugar (PLet b v y sc)      = TLet b v (desugar y) (desugar sc)
+desugar (PLetrec b v t y sc) = TLetrec b v t (desugar y) (desugar sc)
+desugar (PApp b t s)         = TApp b (desugar t) (desugar s)
+desugar (PPrim b y)          = TPrim b y
+desugar (PRec b xs)          = TRec b (desugarRec xs)
+desugar (PIf b i t e)        = TIf b (desugar i) (desugar t) (desugar e)
 
-export %inline
-int : ByteBounded Integer -> Term
-int (B i bb) = nat bb $ cast i
+desugarRec [] = []
+desugarRec ((v,t)::ps) = (v,desugar t) :: desugarRec ps
 
-export %inline
-bool : ByteBounded Bool -> Term
-bool (B b bb) = TPrim bb (PBool b)
-
-export %inline
-unit : ByteBounds -> Term
-unit bb = TPrim bb PUnit
-
-export
-appAll : Term -> List Term -> Term
-appAll s [] = s
-appAll s (x::xs) = appAll (TApp (cast s <+> cast x) s x) xs
-
-export %inline
-appSnoc : Term -> SnocList Term -> Term
-appSnoc s = appAll s . (<>> [])
-
-export %inline
-seq : Term -> Term -> Term
-seq s t = TApp NoBB (TLam NoBB PH (PVar NoBB "Unit") t) s
-
-export %inline
-tif : ByteBounds -> Term -> Term -> Term -> Term
-tif b i t e = TIf (b <+> cast e) i t e
+resugarRec : List (VarName,Term) -> List (VarName,PTerm)
 
 export
-letrec : ByteBounds -> BindName -> RawTpe -> Term -> Term -> Term
-letrec b v t val scope =
-  TLet b v (TApp b (TVar NoBB "fix") (TLam NoBB v t val)) scope
+resugar : Term -> PTerm
+resugar (TVar b v)           = PVar b v
+resugar (TField b y v)       = PField b (resugar y) v
+resugar (TLam b v t sc)      = PLam b v t (resugar sc)
+resugar (TLet b v y sc)      = PLet b v (resugar y) (resugar sc)
+resugar (TLetrec b v t y sc) = PLetrec b v t (resugar y) (resugar sc)
+resugar (TApp b t s)         = PApp b (resugar t) (resugar s)
+resugar (TPrim b y)          = PPrim b y
+resugar (TRec b xs)          = PRec b (resugarRec xs)
+resugar (TIf b i t e)        = PIf b (resugar i) (resugar t) (resugar e)
 
---------------------------------------------------------------------------------
--- Pretty Printing
---------------------------------------------------------------------------------
-
-isAtom : Term -> Bool
-isAtom (TVar {})   = True
-isAtom (TField {}) = True
-isAtom (TPrim {})  = True
-isAtom (TRec {})   = True
-isAtom _           = False
-
-appL : Term -> String
-
-paren : Term -> String
-
-prettyFields : SnocList String -> List (VarName,Term) -> String
-
-pretty : Term -> String
-pretty (TVar _ v)           = v.name
-pretty (TField _ t v)       = "\{paren t}.\{v.val}"
-pretty (TLam _ v t sc)      = "λ\{v}: \{t}. \{pretty sc}"
-pretty (TLet _ v x sc)      = "let \{v} = \{pretty x} in \{pretty sc}"
-pretty (TApp _ t s)         = "\{appL t} \{paren s}"
-pretty (TPrim _ p)          = interpolate p
-pretty (TRec _ p)           = "{\{prettyFields [<] p}}"
-pretty (TIf _ i t e)        = "if \{pretty i} then \{pretty t} else \{pretty e}"
-
-paren t = if isAtom t then pretty t else "(\{pretty t})"
-
-prettyFields ss []          = fastConcat $ intersperse "," (ss <>> [])
-prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}=\{pretty t}") ps
-
-appL (TApp _ t s) = "\{appL t} \{paren s}"
-appL t            = paren t
-
-export %inline
-Interpolation Term where interpolate = pretty
+resugarRec [] = []
+resugarRec ((v,t)::ps) = (v,resugar t) :: resugarRec ps
