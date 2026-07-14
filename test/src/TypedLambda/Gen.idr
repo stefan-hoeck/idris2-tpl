@@ -43,7 +43,15 @@ bindname =
 
 export
 pattern : Gen Pattern
-pattern = PV <$> bindname
+pattern = go 4
+  where
+    go : Nat -> Gen Pattern
+    go 0     = PV <$> bindname
+    go (S k) =
+      frequency
+        [ (1, PV <$> bindname)
+        , (2, PT <$> list (linear 0 5) [| MkPair (bounded varname) (go k) |])
+        ]
 
 export
 tpename : Gen VarName
