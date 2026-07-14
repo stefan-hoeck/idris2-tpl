@@ -110,8 +110,17 @@ top =
     :: step "%eval" (dtrans eval)
     :: vars
 
+bindsteps : Steps q PSz SK
+bindsteps = step '_' (dtrans placeholder) :: vars
+
 bindvars : DFA q PSz SK
-bindvars = spaced (step '_' (dtrans placeholder) :: vars)
+bindvars = spaced bindsteps
+
+startPattern : DFA q PSz SK
+startPattern =
+  spaced $
+       step '{' (bounds >>= dtrans . openPattern)
+    :: bindsteps
 
 ptrans : Lex1 q PSz SK
 ptrans =
@@ -133,8 +142,8 @@ ptrans =
     , entry LAMBDA_COLON      typeAtoms
     , entry LAMBDA_DOT        terms
 
-    , entry LET               bindvars
-    , entry LET_VAR           $ spaced [step '=' (dtrans eq)]
+    , entry LET               startPattern
+    , entry LET_PATTERN       $ spaced [step '=' (dtrans eq)]
     , entry LET_EQ            terms
     , entry LET_IN            terms
     , entry LETREC            bindvars
@@ -142,6 +151,12 @@ ptrans =
     , entry LETREC_COLON      typeAtoms
     , entry LETREC_EQ         terms
     , entry LETREC_IN         terms
+
+    , entry PATTERN           $ spaced $ step '}' (dtrans closePattern) :: vars
+    , entry PATTERN_FIELD     $ spaced [step '=' (dtrans eq)]
+    , entry PATTERN_EQ        startPattern
+    , entry PATTERN_PAT       $ spaced [step '}' (dtrans closePattern), step ',' (dtrans patternComma)]
+    , entry PATTERN_COMMA     $ spaced vars
 
     , entry APP               atomOrClose
     , entry TERM_OPEN         terms
@@ -193,7 +208,7 @@ inBoundsSTATE LAMBDA_VAR              = Refl
 inBoundsSTATE LAMBDA_COLON            = Refl
 inBoundsSTATE LAMBDA_DOT              = Refl
 inBoundsSTATE LET                     = Refl
-inBoundsSTATE LET_VAR                 = Refl
+inBoundsSTATE LET_PATTERN             = Refl
 inBoundsSTATE LET_EQ                  = Refl
 inBoundsSTATE LET_IN                  = Refl
 inBoundsSTATE LETREC                  = Refl
@@ -201,6 +216,11 @@ inBoundsSTATE LETREC_VAR              = Refl
 inBoundsSTATE LETREC_COLON            = Refl
 inBoundsSTATE LETREC_EQ               = Refl
 inBoundsSTATE LETREC_IN               = Refl
+inBoundsSTATE PATTERN                 = Refl
+inBoundsSTATE PATTERN_FIELD           = Refl
+inBoundsSTATE PATTERN_EQ              = Refl
+inBoundsSTATE PATTERN_PAT             = Refl
+inBoundsSTATE PATTERN_COMMA           = Refl
 inBoundsSTATE TERM                    = Refl
 inBoundsSTATE APP                     = Refl
 inBoundsSTATE TERM_OPEN               = Refl

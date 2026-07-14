@@ -19,10 +19,11 @@ data Pattern : Type where
 
 %runElab derive "Pattern" [Show,Eq]
 
-mapPatFields :
-     (ByteBounds -> ByteBounds)
-  -> List (ByteBounded VarName, Pattern)
-  -> List (ByteBounded VarName, Pattern)
+public export
+0 PatField : Type
+PatField = (ByteBounded VarName, Pattern)
+
+mapPatFields : (ByteBounds -> ByteBounds) -> List PatField -> List PatField
 
 mapPatBounds : (ByteBounds -> ByteBounds) -> Pattern -> Pattern
 mapPatBounds f (PV x)  = PV x
@@ -32,11 +33,11 @@ mapPatFields f [] = []
 mapPatFields f ((v,p)::ps) =
   (mapBounds f v, mapPatBounds f p) :: mapPatFields f ps
 
-prettyPatFields : SnocList String -> List (ByteBounded VarName, Pattern) -> String
+prettyPatFields : SnocList String -> List PatField -> String
 
 prettyPat : Pattern -> String
 prettyPat (PV n)  = interpolate n
-prettyPat (PT ps) = "{\{prettyPatFields [<] ps}"
+prettyPat (PT ps) = "{\{prettyPatFields [<] ps}}"
 
 prettyPatFields ss [] = fastConcat $ intersperse "," (ss <>> [])
 prettyPatFields ss ((v,p)::ps) =

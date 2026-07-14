@@ -131,7 +131,7 @@ example =
   %eval factorial (times 3 3);
   %eval (λ_: Nat. λx: Nat. x) 12 13;
   %eval
-    (λx: Complex . {fact = x.snd.nat, strict = x.snd.bool})
+    (λx: Complex . let {snd={nat=n,bool=b}} = x in {fact = n, strict = b})
       { fst = 0
       , snd =
           { bool = iszero 3
