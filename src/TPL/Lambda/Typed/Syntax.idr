@@ -81,7 +81,7 @@ data PTerm : Type where
   PField   : ByteBounds -> PTerm -> ByteBounded VarName -> PTerm
 
   ||| Abstraction: A bound variable, its type, and its scope
-  PLam     : ByteBounds -> (v : BindName) -> (t : RawTpe) -> (sc : PTerm) -> PTerm
+  PLam     : ByteBounds -> Pattern -> (t : RawTpe) -> (sc : PTerm) -> PTerm
 
   ||| Let binding
   PLet     : ByteBounds -> Pattern -> (x : PTerm) -> (sc : PTerm) -> PTerm
@@ -133,8 +133,8 @@ export
 MapBounds PTerm where
   mapBounds f (PVar b v)            = PVar (f b) v
   mapBounds f (PField b t v)        = PField (f b) (mapBounds f t) (mapBounds f v)
-  mapBounds f (PLam b v t sc)       = PLam (f b) v (mapBounds f t) (mapBounds f sc)
-  mapBounds f (PLet b v x sc)       = PLet (f b) (mapBounds f v) (mapBounds f x) (mapBounds f sc)
+  mapBounds f (PLam b p t sc)       = PLam (f b) (mapBounds f p) (mapBounds f t) (mapBounds f sc)
+  mapBounds f (PLet b p x sc)       = PLet (f b) (mapBounds f p) (mapBounds f x) (mapBounds f sc)
   mapBounds f (PLetrec b v t x sc)  = PLetrec (f b) v (mapBounds f t) (mapBounds f x) (mapBounds f sc)
   mapBounds f (PApp b t s)          = PApp (f b) (mapBounds f t) (mapBounds f s)
   mapBounds f (PPrim b y)           = PPrim (f b) y
@@ -169,7 +169,7 @@ appSnoc s = appAll s . (<>> [])
 
 export %inline
 seq : PTerm -> PTerm -> PTerm
-seq s t = PApp NoBB (PLam NoBB PH (PVar NoBB "Unit") t) s
+seq s t = PApp NoBB (PLam NoBB (PV PH) (PVar NoBB "Unit") t) s
 
 export %inline
 tif : ByteBounds -> PTerm -> PTerm -> PTerm -> PTerm
@@ -195,8 +195,8 @@ prettyFields : SnocList String -> List (VarName,PTerm) -> String
 pretty : PTerm -> String
 pretty (PVar _ v)           = v.name
 pretty (PField _ t v)       = "\{paren t}.\{v.val}"
-pretty (PLam _ v t sc)      = "λ\{v}: \{t}. \{pretty sc}"
-pretty (PLet _ v x sc)      = "let \{v} = \{pretty x} in \{pretty sc}"
+pretty (PLam _ p t sc)      = "λ\{p}: \{t}. \{pretty sc}"
+pretty (PLet _ p x sc)      = "let \{p} = \{pretty x} in \{pretty sc}"
 pretty (PLetrec _ v t x sc) = "letrec \{v} : \{t} = \{pretty x} in \{pretty sc}"
 pretty (PApp _ t s)         = "\{appL t} \{paren s}"
 pretty (PPrim _ p)          = interpolate p

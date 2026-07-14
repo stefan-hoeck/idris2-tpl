@@ -107,7 +107,7 @@ term = go 5
         [ (1, prim)
         , (2, [| PApp bb (go k) (go k) |])
         , (2, [| PIf  bb (go k) (go k) (go k) |])
-        , (2, [| PLam bb bindname tpe (go k) |])
+        , (2, [| PLam bb pattern tpe (go k) |])
         , (2, [| PLet bb pattern (go k) (go k) |])
         , (2, [| PLetrec bb bindname tpe (go k) (go k) |])
         , (2, [| PField bb (go k) (bounded varname) |])

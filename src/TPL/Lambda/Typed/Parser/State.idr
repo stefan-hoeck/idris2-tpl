@@ -31,12 +31,12 @@ data STATE : SnocList Type -> Type where
   ALIAS_COLON         : STATE [<SnocList Declaration,ByteBounded VarName]
 
   LAMBDA              : STATE [<ByteBounds]
-  LAMBDA_VAR          : STATE [<ByteBounds,BindName]
-  LAMBDA_COLON        : STATE [<ByteBounds,BindName]
-  LAMBDA_DOT          : STATE [<ByteBounds,BindName,RawTpe]
+  LAMBDA_PAT          : STATE [<ByteBounds,Pattern]
+  LAMBDA_COLON        : STATE [<ByteBounds,Pattern]
+  LAMBDA_DOT          : STATE [<ByteBounds,Pattern,RawTpe]
 
   LET                 : STATE [<ByteBounds]
-  LET_PATTERN         : STATE [<ByteBounds,Pattern]
+  LET_PAT             : STATE [<ByteBounds,Pattern]
   LET_EQ              : STATE [<ByteBounds,Pattern]
   LET_IN              : STATE [<ByteBounds,Pattern,PTerm]
 
@@ -133,7 +133,7 @@ typename _ st    sx = err st sx
 
 export
 colon : StateTrans STATE
-colon LAMBDA_VAR        sx = sx:>LAMBDA_COLON
+colon LAMBDA_PAT        sx = sx:>LAMBDA_COLON
 colon TOP_FUNNAME       sx = sx:>DECL_COLON
 colon ALIAS_TYPENAME    sx = sx:>ALIAS_COLON
 colon RECORD_TYPE_FIELD sx = sx:>RECORD_TYPE_COLON
@@ -144,7 +144,7 @@ export
 eq : StateTrans STATE
 eq TOP_FUNNAME   sx = sx:>DEFN_EQ
 eq RECORD_FIELD  sx = sx:>RECORD_EQ
-eq LET_PATTERN   sx = sx:>LET_EQ
+eq LET_PAT       sx = sx:>LET_EQ
 eq PATTERN_FIELD sx = sx:>PATTERN_EQ
 eq st            sx =
   case endType st sx of
@@ -224,12 +224,13 @@ letrec' b st sx = sx:>st:<b:>LETREC
 
 pattern : Pattern -> StateTrans STATE
 pattern p PATTERN_EQ (sx:<sp:<f) = sx:<(sp:<(f,p)):>PATTERN_PAT
-pattern p LET        sx          = sx:<p:>LET_PATTERN
+pattern p LET        sx          = sx:<p:>LET_PAT
+pattern p LAMBDA     sx          = sx:<p:>LAMBDA_PAT
 pattern p st sx = err st sx
 
 export
 var : ByteBounded VarName -> StateTrans STATE
-var v LAMBDA             sx = sx:<NM v.val:>LAMBDA_VAR
+var v LAMBDA             sx = pattern (PV $ NM v.val) LAMBDA sx
 var v LET                sx = pattern (PV $ NM v.val) LET sx
 var v LETREC             sx = sx:<NM v.val:>LETREC_VAR
 var v TOP                sx = sx:<v:>TOP_FUNNAME
@@ -244,7 +245,7 @@ var v st                 sx = atom (PVar v.bounds v.val) st sx
 
 export
 placeholder : StateTrans STATE
-placeholder LAMBDA      sx = sx:<PH:>LAMBDA_VAR
+placeholder LAMBDA      sx = pattern (PV PH) LAMBDA sx
 placeholder LET         sx = pattern (PV PH) LET sx
 placeholder LETREC      sx = sx:<PH:>LETREC_VAR
 placeholder PATTERN_EQ  sx = pattern (PV PH) PATTERN_EQ sx

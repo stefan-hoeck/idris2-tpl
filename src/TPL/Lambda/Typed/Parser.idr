@@ -137,13 +137,13 @@ ptrans =
     , entry ALIAS_TYPENAME    $ spaced [step ':' (dtrans colon)]
     , entry ALIAS_COLON       typeAtoms
 
-    , entry LAMBDA            bindvars
-    , entry LAMBDA_VAR        $ spaced [step ':' (dtrans colon)]
+    , entry LAMBDA            startPattern
+    , entry LAMBDA_PAT        $ spaced [step ':' (dtrans colon)]
     , entry LAMBDA_COLON      typeAtoms
     , entry LAMBDA_DOT        terms
 
     , entry LET               startPattern
-    , entry LET_PATTERN       $ spaced [step '=' (dtrans eq)]
+    , entry LET_PAT           $ spaced [step '=' (dtrans eq)]
     , entry LET_EQ            terms
     , entry LET_IN            terms
     , entry LETREC            bindvars
@@ -204,11 +204,11 @@ inBoundsSTATE ALIAS                   = Refl
 inBoundsSTATE ALIAS_TYPENAME          = Refl
 inBoundsSTATE ALIAS_COLON             = Refl
 inBoundsSTATE LAMBDA                  = Refl
-inBoundsSTATE LAMBDA_VAR              = Refl
+inBoundsSTATE LAMBDA_PAT              = Refl
 inBoundsSTATE LAMBDA_COLON            = Refl
 inBoundsSTATE LAMBDA_DOT              = Refl
 inBoundsSTATE LET                     = Refl
-inBoundsSTATE LET_PATTERN             = Refl
+inBoundsSTATE LET_PAT                 = Refl
 inBoundsSTATE LET_EQ                  = Refl
 inBoundsSTATE LET_IN                  = Refl
 inBoundsSTATE LETREC                  = Refl
