@@ -13,6 +13,10 @@ record VarName where
 
 %runElab derive "VarName" [Show,Eq,Ord,FromString,Semigroup,Monoid]
 
+export
+machineName : Nat -> VarName
+machineName n = VN "$\{show n}"
+
 export %inline
 Interpolation VarName where interpolate = name
 

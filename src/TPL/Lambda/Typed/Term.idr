@@ -71,7 +71,7 @@ unpats :
 unpat : Nat -> Pattern -> Term -> (Nat, List (BindName, Term))
 unpat n (PV x)  t = (n, [(x,t)])
 unpat n (PT xs) t =
- let vn     := VN "$\{show n}"
+ let vn     := machineName n
      (r,ps) := unpats [<] (S n) xs (TVar NoBB vn)
   in (r, (NM vn, t) :: ps)
 
@@ -85,14 +85,16 @@ unpatLet : ByteBounds -> List (BindName,Term) -> Term -> Term
 unpatLet bb []             x = x
 unpatLet bb ((bn,t) :: ps) x = TLet bb bn t (unpatLet NoBB ps x)
 
-
 desugarRec : List (VarName,PTerm) -> List (VarName,Term)
 
 export
 desugar : PTerm -> Term
 desugar (PVar b v)           = TVar b v
 desugar (PField b y v)       = TField b (desugar y) v
-desugar (PLam b v t sc)      = TLam b v t (desugar sc)
+desugar (PLam b p t sc)      =
+ let v      := machineName 0
+     (_,ps) := unpat 1 p (TVar NoBB v)
+  in TLam b (NM v) t (unpatLet NoBB ps (desugar sc))
 desugar (PLet b p y sc)      =
  let (_,ps) := unpat 0 p (desugar y)
   in unpatLet b ps (desugar sc)
@@ -111,7 +113,7 @@ export
 resugar : Term -> PTerm
 resugar (TVar b v)           = PVar b v
 resugar (TField b y v)       = PField b (resugar y) v
-resugar (TLam b v t sc)      = PLam b v t (resugar sc)
+resugar (TLam b v t sc)      = PLam b (PV v) t (resugar sc)
 resugar (TLet b p y sc)      = PLet b (PV p) (resugar y) (resugar sc)
 resugar (TLetrec b v t y sc) = PLetrec b v t (resugar y) (resugar sc)
 resugar (TApp b t s)         = PApp b (resugar t) (resugar s)
