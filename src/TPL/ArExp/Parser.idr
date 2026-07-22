@@ -1,6 +1,7 @@
 module TPL.ArExp.Parser
 
 import Derive.Prelude
+import Text.ILex.Derive
 import Syntax.T1
 import public TPL.ArExp.TT
 import public TPL.ArExp.Term
@@ -10,102 +11,71 @@ import public TPL.Parser.Util
 %hide Data.Linear.(.)
 %language ElabReflection
 
+%runElab deriveParserState "Lexers" "Lexer"
+  ["TERM","ATOM","THEN","ELSE","CLOSE","DONE","ERR"]
+
 --------------------------------------------------------------------------------
 -- Parser Stack
 --------------------------------------------------------------------------------
 
-data PState : SnocList Type -> Type where
-  PIni   : PState [<]
-  POpn   : PState [<]
-  PIsZ   : PState [<ByteBounds]
-  PSucc  : PState [<ByteBounds]
-  PIf    : PState [<ByteBounds]
-  PPred  : PState [<ByteBounds]
-  PCls   : PState [<Term]
-  PIfV   : PState [<ByteBounds,Term]
-  PThen  : PState [<ByteBounds,Term]
-  PThenV : PState [<ByteBounds,Term,Term]
-  PElse  : PState [<ByteBounds,Term,Term]
-  PTerm  : PState [<Term]
-  PErr   : PState [<]
+data STACK : Type where
+  Top   : STACK
+  If    : STACK -> ByteBounds -> STACK
+  Fun   : STACK -> (Term -> Term) -> STACK
+  Open  : STACK -> STACK
+  Paren : STACK -> Term -> STACK
+  Then  : STACK -> ByteBounds -> Term -> STACK
+  Else  : STACK -> ByteBounds -> Term -> Term -> STACK
+  Done  : Term -> STACK
 
-%runElab deriveIndexed "PState" [Show,ConIndex]
-
-PSz : Bits32
-PSz = 1 + cast (conIndexPState PErr)
-
-inBoundsPState : (s : PState ts) -> (cast (conIndexPState s) < PSz) === True
-
-export %inline
-Cast (PState ts) (Index PSz) where
-  cast v = I (cast $ conIndexPState v) @{mkLT $ inBoundsPState v}
-
-public export
 0 SK : Type -> Type
-SK = DStack PState TpeErr
+SK = Stack (TplErr Tpe) STACK Lexers
 
 parameters {auto sk : SK q}
-  onTerm : Term -> StateAct q PState PSz
-  onTerm trm POpn   sx                  t = dput PCls (sx:<trm) t
-  onTerm trm PIni   sx                  t = dput PTerm [<trm] t
-  onTerm trm PIf    sx                  t = dput PIfV (sx:<trm) t
-  onTerm trm PThen  sx                  t = dput PThenV (sx:<trm) t
-  onTerm trm PSucc  (sx:>pst:<bb)       t =
-    onTerm (TSucc (bb <+> cast trm) trm) pst sx t
-  onTerm trm PPred  (sx:>pst:<bb)       t =
-    onTerm (TPred (bb <+> cast trm) trm) pst sx t
-  onTerm trm PIsZ   (sx:>pst:<bb)       t =
-    onTerm (TIsZ (bb <+> cast trm) trm) pst sx t
-  onTerm trm PElse  [<bb,x,y]           t =
-    dput PTerm [<TIf (bb <+> cast trm) x y trm] t
-  onTerm trm PElse  (sx:>pst:<bb:<x:<y) t =
-    onTerm (TIf (bb <+> cast trm) x y trm) pst sx t
-  onTerm trm st     sx                  t = derr PErr sx st t
+  %inline
+  withStack : (STACK -> F1 q a) -> F1 q a
+  withStack f = getStack >>= f
 
-  onThen : StateAct q PState PSz
-  onThen PIfV sx t = dput PThen sx t
-  onThen st   sx t = derr PErr sx st t
+  onTerm : Term -> STACK -> F1 q Lexer
+  onTerm x (If p b)       = putStackAs (Then p b x) THEN
+  onTerm x (Fun p f)      = onTerm (f x) p
+  onTerm x (Open p)       = putStackAs (Paren p x) CLOSE
+  onTerm x (Then p b y)   = putStackAs (Else p b y x) ELSE
+  onTerm x (Else p b y z) = onTerm (TIf (b <+> cast x) y z x) p
+  onTerm x _              = putStackAs (Done x) DONE
 
-  onElse : StateAct q PState PSz
-  onElse PThenV sx t = dput PElse sx t
-  onElse st     sx t = derr PErr sx st t
+  onClose : F1 q Lexer
+  onClose =
+    getStack >>= \case
+      Paren p t => onTerm t p
+      _         => pure ERR -- not possible
 
-  onClose : StateAct q PState PSz
-  onClose PCls (sx:>st:<v) t = onTerm v st sx t
-  onClose st   sx          t = derr PErr sx st t
+  onFun : (ByteBounds -> Term -> Term) -> F1 q Lexer
+  onFun f = bounds >>= \b => modStackAs SK (`Fun` f b) ATOM
 
-atomSteps : Steps q PSz SK
+  onIf : F1 q Lexer
+  onIf = bounds >>= \b => modStackAs SK (`If` b) TERM
+
+atomSteps : Steps q Lexers SK
 atomSteps =
-     opn '(' (dpush0 POpn)
-  :: bools (\b => bounded' b >>= dact . onTerm . bool)
-  ++ nats  (\b => bounded' b >>= dact . onTerm . int)
+     opn '(' (modStackAs SK Open TERM)
+  :: bools (\b => bounded' b >>= withStack . onTerm . bool)
+  ++ nats  (\b => bounded' b >>= withStack . onTerm . int)
 
-atom : DFA q PSz SK
-atom = spaced atomSteps
 
-value : DFA q PSz SK
-value =
-  spaced $
-    [ step (like "if")     (bounds >>= dpush PIf)
-    , step (like "succ")   (bounds >>= dpush PSucc)
-    , step (like "pred")   (bounds >>= dpush PPred)
-    , step (like "iszero") (bounds >>= dpush PIsZ)
-    ] ++ atomSteps
-
-ptrans : Lex1 q PSz SK
+ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ entry PIni     value
-    , entry POpn     value
-    , entry PIf      value
-    , entry PThen    value
-    , entry PElse    value
-    , entry PSucc    atom
-    , entry PPred    atom
-    , entry PIsZ     atom
-    , entry PCls   $ spaced [close ')' $ dact onClose]
-    , entry PIfV   $ spaced [step (like "then") $ dact onThen]
-    , entry PThenV $ spaced [step (like "else") $ dact onElse]
+    [ E TERM $ spaced $
+        [ step (like "if")     onIf
+        , step (like "succ")   (onFun TSucc)
+        , step (like "pred")   (onFun TPred)
+        , step (like "iszero") (onFun TIsZ)
+        ] ++ atomSteps
+    , E ATOM $ spaced atomSteps
+    , E THEN  $ spaced [step' (like "then") TERM]
+    , E ELSE  $ spaced [step' (like "else") TERM]
+    , E CLOSE $ spaced [close ")" onClose]
     ]
 
 atms : List String
@@ -114,20 +84,19 @@ atms = ["true", "false", "0", "("]
 values : List String
 values = ["if", "succ", "pred", "iszero"] ++ atms
 
-perr : Arr32 PSz (SK q -> F1 q ArErr)
+perr : Arr32 Lexers (SK q -> F1 q ArErr)
 perr =
-  arr32 PSz (unexpected values)
-    [ entry PIfV   $ unexpected ["then"]
-    , entry PThenV $ unexpected ["else"]
-    , entry PCls   $ unclosedIfEOI "(" [")"]
-    , entry PSucc  $ unexpected atms
-    , entry PPred  $ unexpected atms
-    , entry PIsZ   $ unexpected atms
+  errs
+    [ E TERM  $ unexpected values
+    , E ATOM  $ unexpected atms
+    , E THEN  $ unexpected ["then"]
+    , E ELSE  $ unexpected ["else"]
+    , E CLOSE $ unclosedIfEOI ")" [")"]
     ]
 
-peoi : Index PSz -> SK q -> F1 q (Either ArErr Term)
+peoi : Lexer -> SK q -> F1 q (Either ArErr Term)
 peoi st sk t =
- let ([<x]:>PTerm) # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
+ let Done x # t := getStack t | _ # t => arrFail SK perr st sk t
   in Right x # t
 
 ||| Syntax for arithmetic terms (ABNF)
@@ -155,22 +124,4 @@ peoi st sk t =
 |||   wschar      = %x0a / %x0d / %x09 / %x20
 public export
 term : P1 q ArErr Term
-term = P (cast PIni) (init $ [<]:>PIni) ptrans (\x => (Nothing #)) perr peoi
-
---------------------------------------------------------------------------------
--- Proofs
---------------------------------------------------------------------------------
-
-inBoundsPState PIni   = Refl
-inBoundsPState POpn   = Refl
-inBoundsPState PIsZ   = Refl
-inBoundsPState PSucc  = Refl
-inBoundsPState PIf    = Refl
-inBoundsPState PPred  = Refl
-inBoundsPState PCls   = Refl
-inBoundsPState PIfV   = Refl
-inBoundsPState PThen  = Refl
-inBoundsPState PThenV = Refl
-inBoundsPState PElse  = Refl
-inBoundsPState PTerm  = Refl
-inBoundsPState PErr   = Refl
+term = P TERM (init Top) ptrans (\x => (Nothing #)) perr peoi
