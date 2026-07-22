@@ -88,4 +88,4 @@ parameters {auto hb : HasBytes s}
 
   export %inline
   spaced : Steps q r s -> DFA q r s
-  spaced ss = dfa $ jsonSpaced (ignore' linecomment :: ss)
+  spaced ss = dfa $ jsonSpaced (ignore linecomment :: ss)
