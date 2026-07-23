@@ -36,6 +36,10 @@ parameters {auto sk : SK q}
   withStack : (STACK -> F1 q a) -> F1 q a
   withStack f = getStack >>= f
 
+  %inline
+  boundedWithStack : (ByteBounded x -> STACK -> F1 q a) -> x -> F1 q a
+  boundedWithStack f v = bounds >>= withStack . f . B v
+
   onTerm : Term -> STACK -> F1 q Lexer
   onTerm x (If p b)       = putStackAs (Then p b x) THEN
   onTerm x (Fun p f)      = onTerm (f x) p
@@ -59,8 +63,8 @@ parameters {auto sk : SK q}
 atomSteps : Steps q Lexers SK
 atomSteps =
      opn '(' (modStackAs SK Open TERM)
-  :: bools (\b => bounded' b >>= withStack . onTerm . bool)
-  ++ nats  (\b => bounded' b >>= withStack . onTerm . int)
+  :: bools (boundedWithStack $ onTerm . bool)
+  ++ nats  (boundedWithStack $ onTerm . int)
 
 
 ptrans : Lex1 q Lexers SK
