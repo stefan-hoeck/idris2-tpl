@@ -2,150 +2,110 @@ module TPL.Lambda.Parser
 
 import Derive.Prelude
 import Syntax.T1
+import Text.ILex.Derive
 import TPL.Parser.Util
 import public TPL.Lambda.Term
 
 %default total
 %hide Data.Linear.(.)
-%hide Language.Reflection.Types.PLam
-%hide Language.Reflection.Types.PApp
 %language ElabReflection
 
---------------------------------------------------------------------------------
--- Parser Stack
---------------------------------------------------------------------------------
+%runElab deriveParserState "Lexers" "Lexer"
+  ["TERM","ATOM","VAR","DOT","ERR"]
 
-data PState : SnocList Type -> Type where
-  PApp   : PState [<]
-  PAppT  : PState [<Term,SnocList Term]
-  POpn   : PState [<]
-  PLam   : PState [<ByteBounds]
-  PLamV  : PState [<ByteBounds,VarName]
-  PIf    : PState [<ByteBounds]
-  PThen  : PState [<ByteBounds,Term]
-  PElse  : PState [<ByteBounds,Term,Term]
-  PErr   : PState [<]
-
-%runElab deriveIndexed "PState" [Show,ConIndex]
-
-PSz : Bits32
-PSz = 1 + cast (conIndexPState PErr)
-
-inBoundsPState : (s : PState ts) -> (cast (conIndexPState s) < PSz) === True
-
-export %inline
-Cast (PState ts) (Index PSz) where
-  cast v = I (cast $ conIndexPState v) @{mkLT $ inBoundsPState v}
+data STACK : Type where
+  Top   : STACK
+  App   : STACK -> Term -> SnocList Term -> STACK
+  Term  : STACK -> Term -> STACK
+  Lam   : STACK -> ByteBounds -> STACK
+  LamV  : STACK -> ByteBounds -> VarName -> STACK
+  Open  : STACK -> STACK
+  If    : STACK -> ByteBounds -> STACK
+  Then  : STACK -> ByteBounds -> Term -> STACK
+  Else  : STACK -> ByteBounds -> Term -> Term -> STACK
+  Err   : STACK
 
 public export
 0 SK : Type -> Type
-SK = DStack PState TpeErr
+SK = Stack TpeErr STACK Lexers
+
+endTerm : Term -> STACK -> STACK
+endTerm t (LamV s b v)   = endTerm (TLam (b <+> cast t) v t) s
+endTerm t (Else s b x y) = endTerm (TIf (b <+> cast t) x y t) s
+endTerm t s              = Term s t
+
+endApp : STACK -> STACK
+endApp (App s t st) = endTerm (appAllSnoc t st) s
+endApp s            = Err
 
 parameters {auto sk : SK q}
 
-  onTerm : Term -> StateAct q PState PSz
-  onTerm s PApp  sx       t = dput PAppT (sx:<s:<[<]) t
-  onTerm s PAppT (sx:<ss) t = dput PAppT (sx:<(ss:<s)) t
-  onTerm s st sx          t = derr PErr sx st t
+  onAtom : Term -> STACK -> F1 q Lexer
+  onAtom t (App p x sx) = putStackAs (App p x (sx:<t)) ATOM
+  onAtom t p            = putStackAs (App p t [<]) ATOM
 
-  onCloseT : Term -> StateAct q PState PSz
-  onCloseT trm POpn  (sx:>st)          t = onTerm trm st sx t
-  onCloseT trm PApp  (sx:>st)          t = onCloseT trm st sx t
-  onCloseT trm PAppT (sx:>st:<s:<ss)   t = onCloseT (appAllSnoc s ss) st sx t
-  onCloseT trm PLamV (sx:>st:<b:<v)    t = onCloseT (TLam b v trm) st sx t
-  onCloseT trm PElse (sx:>st:<b:<x:<y) t = onCloseT (TIf b x y trm) st sx t
-  onCloseT trm st    sx                t = derr PErr sx st t
+  onIf   : ByteBounds -> STACK -> F1 q Lexer
+  onIf b (Lam {}) = failUnexpected [] ERR
+  onIf b s        = putStackAs (If s b) TERM
 
-  onClose : StateAct q PState PSz
-  onClose PAppT (sx:>st:<s:<ss)    t = onCloseT (appAllSnoc s ss) st sx t
-  onClose st    sx                 t = derr PErr sx st t
+  onThen : STACK -> F1 q Lexer
+  onThen s =
+    case endApp s of
+      Term (If s b) t => putStackAs (Then s b t) TERM
+      _               => failUnexpected [] ERR
 
-  onIf : ByteBounds -> StateAct q PState PSz
-  onIf b PApp  sx t = dput PApp (sx:>PApp:<b:>PIf) t
-  onIf b PLamV sx t = dput PApp (sx:>PLamV:<b:>PIf) t
-  onIf b POpn  sx t = dput PApp (sx:>POpn:<b:>PIf) t
-  onIf b st    sx t = derr PErr sx st t
+  onElse : STACK -> F1 q Lexer
+  onElse s =
+    case endApp s of
+      Term (Then s b x) t => putStackAs (Else s b x t) TERM
+      _                   => failUnexpected [] ERR
 
-  onThen : StateAct q PState PSz
-  onThen PAppT (sx:>PIf:<s:<ss) t = dput PApp (sx:<appAllSnoc s ss:>PThen) t
-  onThen st    sx               t = derr PErr sx st t
+  onLambda : ByteBounds -> STACK -> F1 q Lexer
+  onLambda b s = putStackAs (Lam s b) VAR
 
-  onElse : StateAct q PState PSz
-  onElse PAppT (sx:>PThen:<s:<ss) t = dput PApp (sx:<appAllSnoc s ss:>PElse) t
-  onElse st    sx                 t = derr PErr sx st t
+  onClose : STACK -> F1 q Lexer
+  onClose s =
+    case endApp s of
+      Term (Open s) t => onAtom t s
+      _               => failUnexpected [] ERR
 
-  onVar : ByteBounded VarName -> StateAct q PState PSz
-  onVar v st sx t =
+  onVar : ByteBounded VarName -> STACK -> F1 q Lexer
+  onVar v s =
     case v.val.name of
-      "if"   => onIf v.bounds st sx t
-      "then" => onThen st sx t
-      "else" => onElse st sx t
-      _      => case st of
-        PLam => dput PLamV (sx:<v.val) t
-        _    => onTerm (TVar v.bounds v.val) st sx t
+      "if"   => onIf v.bounds s
+      "then" => onThen s
+      "else" => onElse s
+      _      => case s of
+        Lam p b => putStackAs (LamV p b v.val) DOT
+        _       => onAtom (TVar v.bounds v.val) s
 
-atoms : Steps q PSz SK
+atoms : Steps q Lexers SK
 atoms =
-     opn '(' (getStack >>= \st => dput PApp (st:>POpn))
-  :: bools (\b => bounded' b >>= dact . onTerm . bool)
-  ++ nats  (\b => bounded' b >>= dact . onTerm . int)
-  ++ varName (dact . onVar)
+     opn '(' (modStackAs SK Open TERM)
+  :: bools (boundedWithStack $ onAtom . bool)
+  ++ nats  (boundedWithStack $ onAtom . int)
+  ++ varName (withStack . onVar)
 
-terms : DFA q PSz SK
-terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dpush PLam) :: atoms
-
-atomOrClose : DFA q PSz SK
-atomOrClose = spaced $ close ')' (dact onClose) :: atoms
-
-ptrans : Lex1 q PSz SK
+ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ entry PApp     terms
-    , entry PAppT    atomOrClose
-    , entry PLam   $ spaced (varName $ dact . onVar)
-    , entry PLamV  $ spaced [step '.' $ dpush0 PApp]
+    [ E TERM $ spaced $ step ('\\' <|> 'λ') (boundsWithStack onLambda) :: atoms
+    , E ATOM $ spaced $ close ')' (withStack onClose) :: atoms
+    , E VAR  $ spaced $ varName (withStack . onVar)
+    , E DOT  $ spaced [step' '.' TERM]
     ]
 
-perr : Arr32 PSz (SK q -> F1 q LamErr)
-perr =
-  arr32 PSz (unexpected [])
-    [ entry POpn  $ unclosedIfEOI "(" [")"]
-    , entry PLamV $ unexpected ["."]
-    ]
+perr : Arr32 Lexers (SK q -> F1 q LamErr)
+perr = arr32 Lexers (unexpected []) [E DOT $ unexpected ["."]]
 
-reduceT : Stack b PState [<] -> Term -> Maybe Term
-reduceT [<]                  t = Just t
-reduceT (st:>PApp)           t = reduceT st t
-reduceT (st:<s:<ss:>PAppT)   t = reduceT st (appAllSnoc s $ ss:<t)
-reduceT (sx:<b:<v:>PLamV)    t = reduceT sx (TLam b v t)
-reduceT (sx:<b:<x:<y:>PElse) t = reduceT sx (TIf b x y t)
-reduceT _                    _ = Nothing
-
-reduce : Stack b PState [<] -> Maybe Term
-reduce (sx:<s:<ss:>PAppT) = reduceT sx (appAllSnoc s ss)
-reduce _                  = Nothing
-
-peoi : Index PSz -> SK q -> F1 q (Either LamErr Term)
+peoi : Lexer -> SK q -> F1 q (Either LamErr Term)
 peoi st sk t =
- let sx # t := read1 sk.stack_ t
-  in case reduce sx of
-       Just s  => Right s # t
-       Nothing => arrFail SK perr st sk t
+ let s # t := read1 sk.stack_ t
+  in case endApp s of
+       Term Top x      => Right x # t
+       Term (Open _) _ => let x # t := Interfaces.unclosed ")" sk t in Left x # t
+       _               => arrFail SK perr st sk t
 
 public export
 term : P1 q LamErr Term
-term = P (cast PApp) (init $ [<]:>PApp) ptrans (\x => (Nothing #)) perr peoi
-
---------------------------------------------------------------------------------
--- Proofs
---------------------------------------------------------------------------------
-
-inBoundsPState PApp   = Refl
-inBoundsPState PAppT  = Refl
-inBoundsPState POpn   = Refl
-inBoundsPState PLam   = Refl
-inBoundsPState PLamV  = Refl
-inBoundsPState PIf    = Refl
-inBoundsPState PThen  = Refl
-inBoundsPState PElse  = Refl
-inBoundsPState PErr   = Refl
+term = P TERM (init Top) ptrans (\x => (Nothing #)) perr peoi
