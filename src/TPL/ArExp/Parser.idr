@@ -32,13 +32,6 @@ data STACK : Type where
 SK = Stack (TplErr Tpe) STACK Lexers
 
 parameters {auto sk : SK q}
-  %inline
-  withStack : (STACK -> F1 q a) -> F1 q a
-  withStack f = getStack >>= f
-
-  %inline
-  boundedWithStack : (ByteBounded x -> STACK -> F1 q a) -> x -> F1 q a
-  boundedWithStack f v = bounds >>= withStack . f . B v
 
   onTerm : Term -> STACK -> F1 q Lexer
   onTerm x (If p b)       = putStackAs (Then p b x) THEN
