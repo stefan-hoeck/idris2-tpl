@@ -1,12 +1,19 @@
 module TPL.Lambda.Typed.Parser.State
 
 import Derive.Prelude
-import Text.ILex.DStack
-import public Data.SnocList.Quantifiers
+import Text.ILex.Derive
+import TPL.Parser.Util
 import public TPL.Lambda.Typed.Declaration
 
 %default total
 %language ElabReflection
+
+%runElab deriveParserState "Lexers" "Lexer"
+  [ "TOP", "TOP_SEP", "TERM", "ATOM", "ATOM_OR_CLOSE", "DOT", "EQ"
+  , "VAR", "BINDNAME", "PATTERN"
+  , "TYPE", "ARROW", "TYPE_NAME"
+  , "ERR"
+  ]
 
 public export
 0 RecField : Type
@@ -17,372 +24,277 @@ public export
 RecTypeField = (VarName,RawTpe)
 
 public export
-data STATE : SnocList Type -> Type where
-  TOP                 : STATE [<SnocList Declaration]
+data STACK : Type where
+  Top                 : SnocList Declaration -> STACK
+  TopFun              : STACK -> ByteBounded VarName -> STACK
+  Eval                : STACK -> STACK
+  Alias               : STACK -> STACK
+  AliasName           : STACK -> ByteBounded VarName -> STACK
 
-  TOP_FUNNAME         : STATE [<SnocList Declaration,ByteBounded VarName]
-  DECL_COLON          : STATE [<SnocList Declaration,ByteBounded VarName]
-  DEFN_EQ             : STATE [<SnocList Declaration,ByteBounded VarName]
+  App                 : STACK -> PTerm -> SnocList PTerm -> STACK
+  Term                : STACK -> PTerm -> STACK
 
-  EVAL                : STATE [<SnocList Declaration]
+  Lam                 : STACK -> BytePos -> STACK
+  LamPat              : STACK -> BytePos -> Pattern -> STACK
+  LamTpe              : STACK -> BytePos -> Pattern -> RawTpe -> STACK
 
-  ALIAS               : STATE [<SnocList Declaration]
-  ALIAS_TYPENAME      : STATE [<SnocList Declaration,ByteBounded VarName]
-  ALIAS_COLON         : STATE [<SnocList Declaration,ByteBounded VarName]
+  Let                 : STACK -> BytePos -> STACK
+  LetPat              : STACK -> BytePos -> Pattern -> STACK
+  LetTrm              : STACK -> BytePos -> Pattern -> PTerm -> STACK
 
-  LAMBDA              : STATE [<ByteBounds]
-  LAMBDA_PAT          : STATE [<ByteBounds,Pattern]
-  LAMBDA_COLON        : STATE [<ByteBounds,Pattern]
-  LAMBDA_DOT          : STATE [<ByteBounds,Pattern,RawTpe]
+  Letrec              : STACK -> BytePos -> STACK
+  LetrecVar           : STACK -> BytePos -> BindName -> STACK
+  LetrecTpe           : STACK -> BytePos -> BindName -> RawTpe -> STACK
+  LetrecTrm           : STACK -> BytePos -> BindName -> RawTpe -> PTerm -> STACK
 
-  LET                 : STATE [<ByteBounds]
-  LET_PAT             : STATE [<ByteBounds,Pattern]
-  LET_EQ              : STATE [<ByteBounds,Pattern]
-  LET_IN              : STATE [<ByteBounds,Pattern,PTerm]
+  If                  : STACK -> BytePos -> STACK
+  Then                : STACK -> BytePos -> PTerm -> STACK
+  Else                : STACK -> BytePos -> PTerm -> PTerm -> STACK
 
-  LETREC              : STATE [<ByteBounds]
-  LETREC_VAR          : STATE [<ByteBounds,BindName]
-  LETREC_COLON        : STATE [<ByteBounds,BindName]
-  LETREC_EQ           : STATE [<ByteBounds,BindName,RawTpe]
-  LETREC_IN           : STATE [<ByteBounds,BindName,RawTpe,PTerm]
+  Record              : STACK -> BytePos -> SnocList RecField -> STACK
+  RecordField         : STACK -> BytePos -> SnocList RecField -> VarName -> STACK
 
-  PATTERN             : STATE [<ByteBounds,SnocList PatField]
-  PATTERN_FIELD       : STATE [<ByteBounds,SnocList PatField,ByteBounded VarName]
-  PATTERN_EQ          : STATE [<ByteBounds,SnocList PatField,ByteBounded VarName]
-  PATTERN_PAT         : STATE [<ByteBounds,SnocList PatField]
-  PATTERN_COMMA       : STATE [<ByteBounds,SnocList PatField]
+  Pat                 : STACK -> BytePos -> SnocList PatField -> STACK
+  PatFld              : STACK -> BytePos -> SnocList PatField -> ByteBounded VarName -> STACK
 
-  TERM                : STATE [<PTerm]
-  APP                 : STATE [<PTerm,SnocList PTerm]
-  TERM_OPEN           : STATE [<ByteBounds]
-  SEQ                 : STATE [<ByteBounds,PTerm]
+  OpnTrm              : STACK -> BytePos -> STACK
+  Seq                 : STACK -> BytePos -> PTerm -> STACK
 
-  RECORD              : STATE [<ByteBounds,SnocList RecField]
-  RECORD_FIELD        : STATE [<ByteBounds,SnocList RecField,VarName]
-  RECORD_EQ           : STATE [<ByteBounds,SnocList RecField,VarName]
-  RECORD_COMMA        : STATE [<ByteBounds,SnocList RecField]
+  Tpe                 : STACK -> RawTpe -> STACK
+  TpeSeq              : STACK -> SnocList RawTpe -> RawTpe -> STACK
+  OpnTpe              : STACK -> BytePos -> STACK
+  RecordTpe           : STACK -> BytePos -> SnocList RecTypeField -> STACK
+  RecordFld           : STACK -> BytePos -> SnocList RecTypeField -> VarName -> STACK
 
-  IF                  : STATE [<ByteBounds]
-  THEN                : STATE [<ByteBounds,PTerm]
-  ELSE                : STATE [<ByteBounds,PTerm,PTerm]
+  Err                 : STACK
 
-  TYPE                : STATE [<RawTpe]
-  TYPE_SEQ            : STATE [<SnocList RawTpe, RawTpe]
-  TYPE_ARROW          : STATE [<SnocList RawTpe, RawTpe]
-  TYPE_OPEN           : STATE [<ByteBounds]
-  RECORD_TYPE         : STATE [<ByteBounds,SnocList RecTypeField]
-  RECORD_TYPE_FIELD   : STATE [<ByteBounds,SnocList RecTypeField,VarName]
-  RECORD_TYPE_COLON   : STATE [<ByteBounds,SnocList RecTypeField,VarName]
-  RECORD_TYPE_COMMA   : STATE [<ByteBounds,SnocList RecTypeField]
+export %inline
+recordTpe : STACK -> BytePos -> STACK
+recordTpe s p = RecordTpe s p [<]
 
-  ERR                 : STATE [<]
+export %inline
+record' : STACK -> BytePos -> STACK
+record' s p = Record s p [<]
 
-%runElab deriveIndexed "STATE" [Show,ConIndex]
+export %inline
+pat : STACK -> BytePos -> STACK
+pat s p = Pat s p [<]
 
 public export
-0 StateTrans : (s : SnocList Type -> Type) -> Type
-StateTrans s =
-     {0 ss : _}
-  -> {0 b  : _}
-  -> (st : s ss)
-  -> (sx : Stack b s ss)
-  -> Stack True s [<]
+0 SK : Type -> Type
+SK = Stack TpeErr STACK Lexers
+
+endTerm : PTerm -> STACK -> STACK
+endTerm t (LamTpe s b p tp)     = endTerm (PLam (fromPos b t) p tp t) s
+endTerm t (LetTrm s b p x)      = endTerm (PLet (fromPos b t) p x t) s
+endTerm t (LetrecTrm s b p x y) = endTerm (PLetrec (fromPos b t) p x y t) s
+endTerm t (Else s b x y)        = endTerm (PIf (fromPos b t) x y t) s
+endTerm t s                     = Term s t
+
+endApp : STACK -> STACK
+endApp (App s t st) = endTerm (appSnoc t st) s
+endApp s            = Err
 
 --------------------------------------------------------------------------------
 -- State Transitions
 --------------------------------------------------------------------------------
 
-err : StateTrans STATE
-err st sx = sx:>st:>ERR
+parameters {auto sk : SK q}
 
-term : PTerm -> StateTrans STATE
-term x LAMBDA_DOT (sx:>st:<b:<v:<bt)   = term (PLam b v bt x) st sx
-term x APP        (sx:>st:<y:<ys)      = term (appSnoc y (ys:<x)) st sx
-term x ELSE       (sx:>st:<b:<i:<t)    = term (tif b i t x) st sx
-term x LET_IN     (sx:>st:<b:<p:<s)    = term (PLet (b <+> cast x) p s x) st sx
-term x LETREC_IN  (sx:>st:<b:<v:<t:<s) = term (PLetrec (b <+> cast x) v t s x) st sx
-term x st         sx                   = sx:>st:<x:>TERM
+  --------
+  -- Terms
 
-endTerm : StateTrans STATE
-endTerm APP (sx:>st:<x:<sy) = term (appSnoc x sy) st sx
-endTerm st   sx              = err st sx
+  export
+  onAtom : PTerm -> STACK -> F1 q Lexer
+  onAtom t (App p x sx) = putStackAs (App p x (sx:<t)) ATOM_OR_CLOSE
+  onAtom t p            = putStackAs (App p t [<]) ATOM_OR_CLOSE
 
-endType : StateTrans STATE
-endType TYPE_SEQ (sx:<ss:<s) = sx:<tpeAppAll ss s:>TYPE
-endType st   sx              = err st sx
+  export
+  termSemicolon : STACK -> F1 q Lexer
+  termSemicolon s =
+    case endApp s of
+      Term (Seq s p x) y               => putStackAs (Seq s p $ seq x y) TERM
+      Term (OpnTrm s p) x              => putStackAs (Seq s p x) TERM
+      Term (Eval $ Top ds) x           => putStackAs (Top $ ds:<Eval x) TOP
+      Term (TopFun (Top ds) (B v b)) x => putStackAs (Top $ ds:<Defn b v x) TOP
+      _                                => failUnexpected [] ERR
 
-export
-funname : ByteBounded VarName -> StateTrans STATE
-funname x TOP sx = sx:<x:>TOP_FUNNAME
-funname x st  sx = err st sx
+  export
+  closeTerm : STACK -> F1 q Lexer
+  closeTerm s =
+    case endApp s of
+      Term (Seq s p x) y  => onAtom (seq x y) s
+      Term (OpnTrm s p) x => onAtom x s
+      _                   => failUnexpected [] ERR
 
-export
-eval : StateTrans STATE
-eval TOP sx = sx:>EVAL
-eval st  sx = err st sx
+  export
+  closeRecord : BytePos -> STACK -> F1 q Lexer
 
-export
-alias : StateTrans STATE
-alias TOP sx = sx:>ALIAS
-alias st  sx = err st sx
+  export
+  recordComma : STACK -> F1 q Lexer
 
-export
-typename : ByteBounded VarName -> StateTrans STATE
-typename v ALIAS sx = sx:<v:>ALIAS_TYPENAME
-typename _ st    sx = err st sx
+  export
+  projection : ByteBounded VarName -> STACK -> F1 q Lexer
 
-export
-colon : StateTrans STATE
-colon LAMBDA_PAT        sx = sx:>LAMBDA_COLON
-colon TOP_FUNNAME       sx = sx:>DECL_COLON
-colon ALIAS_TYPENAME    sx = sx:>ALIAS_COLON
-colon RECORD_TYPE_FIELD sx = sx:>RECORD_TYPE_COLON
-colon LETREC_VAR        sx = sx:>LETREC_COLON
-colon st                sx = err st sx
+-- export
+-- endRecordField : StateTrans STATE
+-- endRecordField st sx =
+--   case endTerm st sx of
+--     sx:<sp:<v:>RECORD_EQ:<t:>TERM => sx:<(sp:<(v,t)):>RECORD
+--     _ => err st sx
+--
+-- export
+-- funname : ByteBounded VarName -> StateTrans STATE
+-- funname x TOP sx = sx:<x:>TOP_FUNNAME
+-- funname x st  sx = err st sx
+--
+-- export
+-- colon : StateTrans STATE
+-- colon LAMBDA_PAT        sx = sx:>LAMBDA_COLON
+-- colon TOP_FUNNAME       sx = sx:>DECL_COLON
+-- colon ALIAS_TYPENAME    sx = sx:>ALIAS_COLON
+-- colon RECORD_TYPE_FIELD sx = sx:>RECORD_TYPE_COLON
+-- colon LETREC_VAR        sx = sx:>LETREC_COLON
+-- colon st                sx = err st sx
+--
+-- export
+-- eq : StateTrans STATE
+-- eq TOP_FUNNAME   sx = sx:>DEFN_EQ
+-- eq RECORD_FIELD  sx = sx:>RECORD_EQ
+-- eq LET_PAT       sx = sx:>LET_EQ
+-- eq PATTERN_FIELD sx = sx:>PATTERN_EQ
+-- eq st            sx =
+--   case endType st sx of
+--     sx:>LETREC_COLON:<t:>TYPE => sx:<t:>LETREC_EQ
+--     _ => err st sx
 
-export
-eq : StateTrans STATE
-eq TOP_FUNNAME   sx = sx:>DEFN_EQ
-eq RECORD_FIELD  sx = sx:>RECORD_EQ
-eq LET_PAT       sx = sx:>LET_EQ
-eq PATTERN_FIELD sx = sx:>PATTERN_EQ
-eq st            sx =
-  case endType st sx of
-    sx:>LETREC_COLON:<t:>TYPE => sx:<t:>LETREC_EQ
-    _ => err st sx
+  export
+  then' : STACK -> F1 q Lexer
+  then' s =
+    case endApp s of
+      Term (If p b) t => putStackAs (Then p b t) TERM
+      _               => failUnexpected [] ERR
 
-export
-lambda : ByteBounds -> StateTrans STATE
-lambda b st sx = sx:>st:<b:>LAMBDA
+  export
+  else' : STACK -> F1 q Lexer
+  else' s =
+    case endApp s of
+      Term (Then p b x) y => putStackAs (Else p b x y) TERM
+      _                   => failUnexpected [] ERR
 
-export
-dot : StateTrans STATE
-dot TYPE_SEQ (sx:>LAMBDA_COLON:<ss:<s) = sx:<(tpeAppAll ss s):>LAMBDA_DOT
-dot st       sx                        = err st sx
+  export
+  in' : STACK -> F1 q Lexer
+  in' s =
+    case endApp s of
+      Term (LetPat p b x) y => putStackAs (LetTrm p b x y) TERM
+      _                     => failUnexpected [] ERR
 
-export
-atom : PTerm -> StateTrans STATE
-atom x APP (sx:<y) = sx:<(y:<x):>APP
-atom x st  sx      = sx:>st:<x:<[<]:>APP
+  -----------
+  -- Patterns
 
-export
-typeAtom : RawTpe -> StateTrans STATE
-typeAtom t TYPE_ARROW (sx:<ss:<s) = sx:<(ss:<s):<t:>TYPE_SEQ
-typeAtom t st         sx          = sx:>st:<[<]:<t:>TYPE_SEQ
+-- pattern : Pattern -> StateTrans STATE
+-- pattern p PATTERN_EQ (sx:<sp:<f) = sx:<(sp:<(f,p)):>PATTERN_PAT
+-- pattern p LET        sx          = sx:<p:>LET_PAT
+-- pattern p LAMBDA     sx          = sx:<p:>LAMBDA_PAT
+-- pattern p st sx = err st sx
 
-export
-termSemicolon : StateTrans STATE
-termSemicolon st sx =
-  case endTerm st sx of
-    sy:>TERM_OPEN:<t:>TERM       => sy:<t:>SEQ
-    sy:<s:>SEQ:<t:>TERM          => sy:<seq s t:>SEQ
-    sy:<sd:>EVAL:<t:>TERM        => sy:<(sd:<Eval t):>TOP
-    sy:<sd:<vn:>DEFN_EQ:<t:>TERM => sy:<(sd:<Defn vn.bounds vn.val t):>TOP
-    _                            => err st sx
+  export
+  openPattern : BytePos -> STACK -> F1 q Lexer
+-- openPattern b st sx = sx:>st:<b:<[<]:>PATTERN
+--
+-- export
+-- closePattern : StateTrans STATE
+-- closePattern PATTERN (sx:>st:<_:<sp)     = pattern (PT $ sp <>> []) st sx
+-- closePattern PATTERN_PAT (sx:>st:<_:<sp) = pattern (PT $ sp <>> []) st sx
+-- closePattern st sx = err st sx
+--
+-- export
+-- patternComma : StateTrans STATE
+-- patternComma PATTERN_PAT sx = sx:>PATTERN_COMMA
+-- patternComma st          sx = err st sx
 
-export
-typeSemicolon : StateTrans STATE
-typeSemicolon st sx =
-  case endType st sx of
-    sx:<sd:<b:>ALIAS_COLON:<t:>TYPE => sx:<(sd:<Alias b.bounds b.val t):>TOP
-    sx:<sd:<b:>DECL_COLON:<t:>TYPE  => sx:<(sd:<Decl b.bounds b.val t):>TOP
-    _ => err st sx
+  --------
+  -- Types
+--
+-- export
+-- typename : ByteBounded VarName -> StateTrans STATE
+-- typename v ALIAS sx = sx:<v:>ALIAS_TYPENAME
+-- typename _ st    sx = err st sx
 
-export
-if' : ByteBounds -> StateTrans STATE
-if' b st sx = sx:>st:<b:>IF
+-- endType : StateTrans STATE
+-- endType TYPE_SEQ (sx:<ss:<s) = sx:<tpeAppAll ss s:>TYPE
+-- endType st   sx              = err st sx
 
-export
-then' : StateTrans STATE
-then' st sx =
-  case endTerm st sx of
-    sy:>IF:<t:>TERM => sy:<t:>THEN
-    _               => err st sx
+  export
+  typeAtom : RawTpe -> STACK -> F1 q Lexer
+-- typeAtom t TYPE_ARROW (sx:<ss:<s) = sx:<(ss:<s):<t:>TYPE_SEQ
+-- typeAtom t st         sx          = sx:>st:<[<]:<t:>TYPE_SEQ
 
-export
-else' : StateTrans STATE
-else' st sx =
-  case endTerm st sx of
-    sy:>THEN:<t:>TERM => sy:<t:>ELSE
-    _                 => err st sx
+-- export
+-- dot : StateTrans STATE
+-- dot TYPE_SEQ (sx:>LAMBDA_COLON:<ss:<s) = sx:<(tpeAppAll ss s):>LAMBDA_DOT
+-- dot st       sx                        = err st sx
+--
+-- export
+-- typeSemicolon : StateTrans STATE
+-- typeSemicolon st sx =
+--   case endType st sx of
+--     sx:<sd:<b:>ALIAS_COLON:<t:>TYPE => sx:<(sd:<Alias b.bounds b.val t):>TOP
+--     sx:<sd:<b:>DECL_COLON:<t:>TYPE  => sx:<(sd:<Decl b.bounds b.val t):>TOP
+--     _ => err st sx
 
-export
-in' : StateTrans STATE
-in' st sx =
-  case endTerm st sx of
-    sy:>LET_EQ:<t:>TERM    => sy:<t:>LET_IN
-    sy:>LETREC_EQ:<t:>TERM => sy:<t:>LETREC_IN
-    _                      => err st sx
+-- export
+-- closeType : StateTrans STATE
+-- closeType st sx =
+--   case endType st sx of
+--     sx:>st:<b:>TYPE_OPEN:<t:>TYPE => typeAtom t st sx
+--     _ => err st sx
+--
+-- export
+-- endRecordTypeField : StateTrans STATE
+-- endRecordTypeField st sx =
+--   case endType st sx of
+--     sx:<sp:<v:>RECORD_TYPE_COLON:<t:>TYPE => sx:<(sp:<(v,t)):>RECORD_TYPE
+--     _ => err st sx
+--
+-- export
+-- recordTypeComma : StateTrans STATE
+-- recordTypeComma st sx =
+--   case endRecordTypeField st sx of
+--     sx:>RECORD_TYPE => sx:>RECORD_TYPE_COMMA
+--     _ => err st sx
+--
+-- export
+-- closeRecordType : ByteBounds -> StateTrans STATE
+-- closeRecordType b2 st sx =
+--   case endRecordTypeField st sx of
+--     sx:>st:<b:<sp:>RECORD_TYPE => typeAtom (PRec (b<+>b2) (sp<>>[])) st sx
+--     _ => err st sx
+--
+-- export
+-- arrow : StateTrans STATE
+-- arrow TYPE_SEQ sx = sx:>TYPE_ARROW
+-- arrow st       sx = err st sx
 
-export
-let' : ByteBounds -> StateTrans STATE
-let' b st sx = sx:>st:<b:>LET
-
-export
-letrec' : ByteBounds -> StateTrans STATE
-letrec' b st sx = sx:>st:<b:>LETREC
-
-pattern : Pattern -> StateTrans STATE
-pattern p PATTERN_EQ (sx:<sp:<f) = sx:<(sp:<(f,p)):>PATTERN_PAT
-pattern p LET        sx          = sx:<p:>LET_PAT
-pattern p LAMBDA     sx          = sx:<p:>LAMBDA_PAT
-pattern p st sx = err st sx
-
-export
-var : ByteBounded VarName -> StateTrans STATE
-var v LAMBDA             sx = pattern (PV $ NM v.val) LAMBDA sx
-var v LET                sx = pattern (PV $ NM v.val) LET sx
-var v LETREC             sx = sx:<NM v.val:>LETREC_VAR
-var v TOP                sx = sx:<v:>TOP_FUNNAME
-var v PATTERN            sx = sx:<v:>PATTERN_FIELD
-var v PATTERN_COMMA      sx = sx:<v:>PATTERN_FIELD
-var v PATTERN_EQ         sx = pattern (PV $ NM v.val) PATTERN_EQ sx
-var v RECORD             sx = sx:<v.val:>RECORD_FIELD
-var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
-var v RECORD_TYPE        sx = sx:<v.val:>RECORD_TYPE_FIELD
-var v RECORD_TYPE_COMMA  sx = sx:<v.val:>RECORD_TYPE_FIELD
-var v st                 sx = atom (PVar v.bounds v.val) st sx
-
-export
-placeholder : StateTrans STATE
-placeholder LAMBDA      sx = pattern (PV PH) LAMBDA sx
-placeholder LET         sx = pattern (PV PH) LET sx
-placeholder LETREC      sx = sx:<PH:>LETREC_VAR
-placeholder PATTERN_EQ  sx = pattern (PV PH) PATTERN_EQ sx
-placeholder st          sx = err st sx
-
-export
-openTerm : ByteBounds -> StateTrans STATE
-openTerm b st sx = sx:>st:<b:>TERM_OPEN
-
-export
-openType : ByteBounds -> StateTrans STATE
-openType b st sx = sx:>st:<b:>TYPE_OPEN
-
-export
-openRecord : ByteBounds -> StateTrans STATE
-openRecord b st sx = sx:>st:<b:<[<]:>RECORD
-
-export
-openRecordType : ByteBounds -> StateTrans STATE
-openRecordType b st sx = sx:>st:<b:<[<]:>RECORD_TYPE
-
-export
-openPattern : ByteBounds -> StateTrans STATE
-openPattern b st sx = sx:>st:<b:<[<]:>PATTERN
-
-export
-closePattern : StateTrans STATE
-closePattern PATTERN (sx:>st:<_:<sp)     = pattern (PT $ sp <>> []) st sx
-closePattern PATTERN_PAT (sx:>st:<_:<sp) = pattern (PT $ sp <>> []) st sx
-closePattern st sx = err st sx
-
-export
-patternComma : StateTrans STATE
-patternComma PATTERN_PAT sx = sx:>PATTERN_COMMA
-patternComma st          sx = err st sx
-
-export
-projection : ByteBounded VarName -> StateTrans STATE
-projection b APP (sx:<t:<ss) =
-  case ss of
-    i:<l => sx:<t:<(i:<PField (cast l <+> b.bounds) l b):>APP
-    [<]  => sx:<PField (cast t <+> b.bounds) t b:<[<]:>APP
-projection _ st sx = err st sx
-
-export
-closeTerm : StateTrans STATE
-closeTerm st sx =
-  case endTerm st sx of
-    sx:>st:<_:<s:>SEQ:<t:>TERM => atom (seq s t) st sx
-    sx:>st:<_:>TERM_OPEN:<t:>TERM => atom t st sx
-    _ => err st sx
-
-export
-endRecordField : StateTrans STATE
-endRecordField st sx =
-  case endTerm st sx of
-    sx:<sp:<v:>RECORD_EQ:<t:>TERM => sx:<(sp:<(v,t)):>RECORD
-    _ => err st sx
-
-export
-recordComma : StateTrans STATE
-recordComma st sx =
-  case endRecordField st sx of
-    sx:>RECORD => sx:>RECORD_COMMA
-    _ => err st sx
-
-export
-closeRecord : ByteBounds -> StateTrans STATE
-closeRecord b2 st sx =
-  case endRecordField st sx of
-    sx:>st:<b:<sp:>RECORD => atom (PRec (b<+>b2) (sp<>>[])) st sx
-    _ => err st sx
-
-export
-closeType : StateTrans STATE
-closeType st sx =
-  case endType st sx of
-    sx:>st:<b:>TYPE_OPEN:<t:>TYPE => typeAtom t st sx
-    _ => err st sx
-
-export
-endRecordTypeField : StateTrans STATE
-endRecordTypeField st sx =
-  case endType st sx of
-    sx:<sp:<v:>RECORD_TYPE_COLON:<t:>TYPE => sx:<(sp:<(v,t)):>RECORD_TYPE
-    _ => err st sx
-
-export
-recordTypeComma : StateTrans STATE
-recordTypeComma st sx =
-  case endRecordTypeField st sx of
-    sx:>RECORD_TYPE => sx:>RECORD_TYPE_COMMA
-    _ => err st sx
-
-export
-closeRecordType : ByteBounds -> StateTrans STATE
-closeRecordType b2 st sx =
-  case endRecordTypeField st sx of
-    sx:>st:<b:<sp:>RECORD_TYPE => typeAtom (PRec (b<+>b2) (sp<>>[])) st sx
-    _ => err st sx
-
-export
-arrow : StateTrans STATE
-arrow TYPE_SEQ sx = sx:>TYPE_ARROW
-arrow st       sx = err st sx
-
-export
-openBounds : Stack b STATE ts -> Maybe (ByteBounds,String)
-openBounds (sx:<b:>TERM_OPEN)               = Just (b, "(")
-openBounds (sx:<b:<_:>SEQ)                  = Just (b, "(")
-openBounds (sx:<b:<_:>RECORD)               = Just (b, "{")
-openBounds (sx:<b:<_:<_:>RECORD_FIELD)      = Just (b, "{")
-openBounds (sx:<b:<_:<_:>RECORD_EQ)         = Just (b, "{")
-openBounds (sx:<b:<_:>RECORD_COMMA)         = Just (b, "{")
-openBounds (sx:<b:<_:>PATTERN)              = Just (b, "{")
-openBounds (sx:<b:<_:<_:>PATTERN_FIELD)     = Just (b, "{")
-openBounds (sx:<b:<_:<_:>PATTERN_EQ)        = Just (b, "{")
-openBounds (sx:<b:<_:>PATTERN_PAT)          = Just (b, "{")
-openBounds (sx:<b:<_:>PATTERN_COMMA)        = Just (b, "{")
-openBounds (sx:<b:<_:>RECORD_TYPE)          = Just (b, "{")
-openBounds (sx:<b:<_:<_:>RECORD_TYPE_FIELD) = Just (b, "{")
-openBounds (sx:<b:<_:<_:>RECORD_TYPE_COLON) = Just (b, "{")
-openBounds (sx:<b:<_:>RECORD_TYPE_COMMA)    = Just (b, "{")
-openBounds (sx:<_)                          = openBounds sx
-openBounds (sx:>_)                          = openBounds sx
-openBounds [<]                              = Nothing
-
-test : List (StateTrans STATE)
-test =
-  [ var (pure "foo")
-  , colon
-  , openRecordType neutral
-  , var (pure "foo")
-  , colon
-  , typeAtom (pvar $ pure "Nat")
-  , typeSemicolon
-  ]
-
-run : List (StateTrans STATE) -> Stack True STATE [<]
-run = foldl (\s,f => let sx:>st := s in f st sx) ([<[<]]:>TOP)
+  export
+  var : ByteBounded VarName -> STACK -> F1 q Lexer
+-- var v LAMBDA             sx = pattern (PV $ NM v.val) LAMBDA sx
+-- var v LET                sx = pattern (PV $ NM v.val) LET sx
+-- var v LETREC             sx = sx:<NM v.val:>LETREC_VAR
+-- var v TOP                sx = sx:<v:>TOP_FUNNAME
+-- var v PATTERN            sx = sx:<v:>PATTERN_FIELD
+-- var v PATTERN_COMMA      sx = sx:<v:>PATTERN_FIELD
+-- var v PATTERN_EQ         sx = pattern (PV $ NM v.val) PATTERN_EQ sx
+-- var v RECORD             sx = sx:<v.val:>RECORD_FIELD
+-- var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
+-- var v RECORD_TYPE        sx = sx:<v.val:>RECORD_TYPE_FIELD
+-- var v RECORD_TYPE_COMMA  sx = sx:<v.val:>RECORD_TYPE_FIELD
+-- var v st                 sx = atom (PVar v.bounds v.val) st sx
+--
+  export
+  placeholder : STACK -> F1 q Lexer
+-- placeholder LAMBDA      sx = pattern (PV PH) LAMBDA sx
+-- placeholder LET         sx = pattern (PV PH) LET sx
+-- placeholder LETREC      sx = sx:<PH:>LETREC_VAR
+-- placeholder PATTERN_EQ  sx = pattern (PV PH) PATTERN_EQ sx
+-- placeholder st          sx = err st sx
