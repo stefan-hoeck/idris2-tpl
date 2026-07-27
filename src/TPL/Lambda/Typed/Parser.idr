@@ -56,8 +56,9 @@ ptrans =
         :: step "else" (withStack else')
         :: step "then" (withStack then')
         :: step "in" (withStack in')
-        -- :: bytes proj (\b => bounded' (field b) >>= dtrans . projection)
+        :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
         :: atoms
+    , E EQ $ spaced [step' '=' TERM]
 
     , E VAR $ spaced vars
     , E BINDNAME $ spaced bindsteps
@@ -73,8 +74,11 @@ ptrans =
     , E ARROW $ spaced $
         [ step' "->" TYPE
         , step ')' (withStack closeType)
+        , step '}' (posWithStack closeRecordType)
         , step '.' (withStack dot)
         , step ';' (withStack typeSemicolon)
+        , step '=' (withStack typeEq)
+        , step ',' (withStack typeComma)
         ]
     ]
 

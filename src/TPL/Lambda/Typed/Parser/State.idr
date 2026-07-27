@@ -156,8 +156,13 @@ parameters {auto sk : SK q}
       Term (RecordFld s x sp f) t => putStackAs (Record s x $ sp:<(f,t)) VAR
       _                           => die
 
---   export
---   projection : ByteBounded VarName -> STACK -> F1 q Lexer
+  export
+  projection : ByteBounded VarName -> STACK -> F1 q Lexer
+  projection b (App p s ss) =
+    case ss of
+      i:<l => putStackAs (App p s $ i:<field l b) ATOM
+      [<]  => putStackAs (App p (field s b) [<]) ATOM
+  projection _ _ = die
 
   export
   then' : STACK -> F1 q Lexer
@@ -177,8 +182,9 @@ parameters {auto sk : SK q}
   in' : STACK -> F1 q Lexer
   in' s =
     case endApp s of
-      Term (LetPat p b x) y => putStackAs (LetTrm p b x y) TERM
-      _                     => die
+      Term (LetPat p b x) y      => putStackAs (LetTrm p b x y) TERM
+      Term (LetrecTpe p b x t) y => putStackAs (LetrecTrm p b x t y) TERM
+      _                          => die
 
   -----------
   -- Patterns
@@ -203,7 +209,6 @@ parameters {auto sk : SK q}
   --------
   -- Types
 
-
   export
   typeAtom : RawTpe -> STACK -> F1 q Lexer
   typeAtom t (TpeSeq p st s) = putStackAs (TpeSeq p (st:<s) t) ARROW
@@ -225,32 +230,33 @@ parameters {auto sk : SK q}
       _                  => die
 
   export
+  typeComma : STACK -> F1 q Lexer
+  typeComma s =
+    case endType s of
+      Tpe (RecordTpeFld p b ps f) t => putStackAs (RecordTpe p b $ ps:<(f,t)) VAR
+      _                             => die
+
+  export
   closeType : STACK -> F1 q Lexer
   closeType s =
     case endType s of
       Tpe (OpnTpe p _) t => typeAtom t p
       _                  => die
 
--- export
--- endRecordTypeField : StateTrans STATE
--- endRecordTypeField st sx =
---   case endType st sx of
---     sx:<sp:<v:>RECORD_TYPE_COLON:<t:>TYPE => sx:<(sp:<(v,t)):>RECORD_TYPE
---     _ => err st sx
---
--- export
--- recordTypeComma : StateTrans STATE
--- recordTypeComma st sx =
---   case endRecordTypeField st sx of
---     sx:>RECORD_TYPE => sx:>RECORD_TYPE_COMMA
---     _ => err st sx
---
--- export
--- closeRecordType : ByteBounds -> StateTrans STATE
--- closeRecordType b2 st sx =
---   case endRecordTypeField st sx of
---     sx:>st:<b:<sp:>RECORD_TYPE => typeAtom (PRec (b<+>b2) (sp<>>[])) st sx
---     _ => err st sx
+  export
+  typeEq : STACK -> F1 q Lexer
+  typeEq s =
+    case endType s of
+      Tpe (LetrecVar s x p) t => putStackAs (LetrecTpe s x p t) TERM
+      _                       => die
+
+  export
+  closeRecordType : BytePos -> STACK -> F1 q Lexer
+  closeRecordType y s =
+    case endType s of
+      Tpe (RecordTpeFld p x sp f) t => typeAtom (PRec (BB x y) (sp<>>[(f,t)])) p
+      _                             => die
+
 
   export
   placeholder : STACK -> F1 q Lexer
@@ -266,4 +272,7 @@ parameters {auto sk : SK q}
   var b (Top sx)           = putStackAs (TopFun (Top sx) b) TOP_SEP
   var b (Record x y sx)    = putStackAs (RecordFld x y sx b.val) EQ
   var b (RecordTpe x y sx) = putStackAs (RecordTpeFld x y sx b.val) COLON
+  var b (Lam s x)          = putStackAs (LamPat s x $ cast b) COLON
+  var b (Letrec s x)       = putStackAs (LetrecVar s x $ cast b) COLON
+  var b (Let s x)          = putStackAs (LetPat s x $ cast b) EQ
   var b s                  = onAtom (PVar b.bounds b.val) s

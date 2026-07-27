@@ -19,6 +19,10 @@ data Pattern : Type where
 
 %runElab derive "Pattern" [Show,Eq]
 
+export %inline
+Cast a BindName => Cast a Pattern where
+  cast = PV . cast
+
 public export
 0 PatField : Type
 PatField = (ByteBounded VarName, Pattern)
@@ -174,6 +178,10 @@ seq s t = PApp NoBB (PLam NoBB (PV PH) (PVar NoBB "Unit") t) s
 export %inline
 tif : ByteBounds -> PTerm -> PTerm -> PTerm -> PTerm
 tif b i t e = PIf (b <+> cast e) i t e
+
+export %inline
+field : PTerm -> ByteBounded VarName -> PTerm
+field p v = PField (cast p <+> v.bounds) p v
 
 --------------------------------------------------------------------------------
 -- Pretty Printing
