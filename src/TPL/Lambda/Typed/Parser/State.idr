@@ -11,7 +11,7 @@ import public TPL.Lambda.Typed.Declaration
 %runElab deriveParserState "Lexers" "Lexer"
   [ "TOP", "TOP_SEP", "TERM", "ATOM", "ATOM_OR_CLOSE", "DOT", "EQ"
   , "VAR", "BINDNAME", "PATTERN"
-  , "TYPE", "ARROW", "TYPE_NAME"
+  , "TYPE", "ARROW", "ALIAS_NAME", "COLON"
   , "ERR"
   ]
 
@@ -28,8 +28,7 @@ data STACK : Type where
   Top                 : SnocList Declaration -> STACK
   TopFun              : STACK -> ByteBounded VarName -> STACK
   Eval                : STACK -> STACK
-  Alias               : STACK -> STACK
-  AliasName           : STACK -> ByteBounded VarName -> STACK
+  Alias               : STACK -> ByteBounded VarName -> STACK
 
   App                 : STACK -> PTerm -> SnocList PTerm -> STACK
   Term                : STACK -> PTerm -> STACK
@@ -52,7 +51,7 @@ data STACK : Type where
   Else                : STACK -> BytePos -> PTerm -> PTerm -> STACK
 
   Record              : STACK -> BytePos -> SnocList RecField -> STACK
-  RecordField         : STACK -> BytePos -> SnocList RecField -> VarName -> STACK
+  RecordFld           : STACK -> BytePos -> SnocList RecField -> VarName -> STACK
 
   Pat                 : STACK -> BytePos -> SnocList PatField -> STACK
   PatFld              : STACK -> BytePos -> SnocList PatField -> ByteBounded VarName -> STACK
@@ -64,7 +63,7 @@ data STACK : Type where
   TpeSeq              : STACK -> SnocList RawTpe -> RawTpe -> STACK
   OpnTpe              : STACK -> BytePos -> STACK
   RecordTpe           : STACK -> BytePos -> SnocList RecTypeField -> STACK
-  RecordFld           : STACK -> BytePos -> SnocList RecTypeField -> VarName -> STACK
+  RecordTpeFld        : STACK -> BytePos -> SnocList RecTypeField -> VarName -> STACK
 
   Err                 : STACK
 
@@ -95,11 +94,27 @@ endApp : STACK -> STACK
 endApp (App s t st) = endTerm (appSnoc t st) s
 endApp s            = Err
 
+endType : STACK -> STACK
+endType (TpeSeq p ss s) = Tpe p (tpeAppAll ss s)
+endType _               = Err
+
 --------------------------------------------------------------------------------
 -- State Transitions
 --------------------------------------------------------------------------------
 
 parameters {auto sk : SK q}
+  export %inline
+  die : F1 q Lexer
+  die = failUnexpected [] ERR
+
+  export %inline
+  pushDecl : Declaration -> STACK -> F1 q Lexer
+  pushDecl d (Top sd) = putStackAs (Top $ sd:<d) TOP
+  pushDecl _ _        = die
+
+  export %inline
+  alias : ByteBounded VarName -> STACK -> F1 q Lexer
+  alias b s = putStackAs (Alias s b) COLON
 
   --------
   -- Terms
@@ -113,11 +128,11 @@ parameters {auto sk : SK q}
   termSemicolon : STACK -> F1 q Lexer
   termSemicolon s =
     case endApp s of
-      Term (Seq s p x) y               => putStackAs (Seq s p $ seq x y) TERM
-      Term (OpnTrm s p) x              => putStackAs (Seq s p x) TERM
-      Term (Eval $ Top ds) x           => putStackAs (Top $ ds:<Eval x) TOP
-      Term (TopFun (Top ds) (B v b)) x => putStackAs (Top $ ds:<Defn b v x) TOP
-      _                                => failUnexpected [] ERR
+      Term (Seq s p x) y        => putStackAs (Seq s p $ seq x y) TERM
+      Term (OpnTrm s p) x       => putStackAs (Seq s p x) TERM
+      Term (Eval p) x           => pushDecl (Eval x) p
+      Term (TopFun p (B v b)) x => pushDecl (Defn b v x) p
+      _                         => die
 
   export
   closeTerm : STACK -> F1 q Lexer
@@ -125,69 +140,45 @@ parameters {auto sk : SK q}
     case endApp s of
       Term (Seq s p x) y  => onAtom (seq x y) s
       Term (OpnTrm s p) x => onAtom x s
-      _                   => failUnexpected [] ERR
+      _                   => die
 
   export
   closeRecord : BytePos -> STACK -> F1 q Lexer
+  closeRecord y s =
+    case endApp s of
+      Term (RecordFld s x sp f) t => onAtom (PRec (BB x y) (sp<>>[(f,t)])) s
+      _                           => die
 
   export
   recordComma : STACK -> F1 q Lexer
+  recordComma s =
+    case endApp s of
+      Term (RecordFld s x sp f) t => putStackAs (Record s x $ sp:<(f,t)) VAR
+      _                           => die
 
-  export
-  projection : ByteBounded VarName -> STACK -> F1 q Lexer
-
--- export
--- endRecordField : StateTrans STATE
--- endRecordField st sx =
---   case endTerm st sx of
---     sx:<sp:<v:>RECORD_EQ:<t:>TERM => sx:<(sp:<(v,t)):>RECORD
---     _ => err st sx
---
--- export
--- funname : ByteBounded VarName -> StateTrans STATE
--- funname x TOP sx = sx:<x:>TOP_FUNNAME
--- funname x st  sx = err st sx
---
--- export
--- colon : StateTrans STATE
--- colon LAMBDA_PAT        sx = sx:>LAMBDA_COLON
--- colon TOP_FUNNAME       sx = sx:>DECL_COLON
--- colon ALIAS_TYPENAME    sx = sx:>ALIAS_COLON
--- colon RECORD_TYPE_FIELD sx = sx:>RECORD_TYPE_COLON
--- colon LETREC_VAR        sx = sx:>LETREC_COLON
--- colon st                sx = err st sx
---
--- export
--- eq : StateTrans STATE
--- eq TOP_FUNNAME   sx = sx:>DEFN_EQ
--- eq RECORD_FIELD  sx = sx:>RECORD_EQ
--- eq LET_PAT       sx = sx:>LET_EQ
--- eq PATTERN_FIELD sx = sx:>PATTERN_EQ
--- eq st            sx =
---   case endType st sx of
---     sx:>LETREC_COLON:<t:>TYPE => sx:<t:>LETREC_EQ
---     _ => err st sx
+--   export
+--   projection : ByteBounded VarName -> STACK -> F1 q Lexer
 
   export
   then' : STACK -> F1 q Lexer
   then' s =
     case endApp s of
       Term (If p b) t => putStackAs (Then p b t) TERM
-      _               => failUnexpected [] ERR
+      _               => die
 
   export
   else' : STACK -> F1 q Lexer
   else' s =
     case endApp s of
       Term (Then p b x) y => putStackAs (Else p b x y) TERM
-      _                   => failUnexpected [] ERR
+      _                   => die
 
   export
   in' : STACK -> F1 q Lexer
   in' s =
     case endApp s of
       Term (LetPat p b x) y => putStackAs (LetTrm p b x y) TERM
-      _                     => failUnexpected [] ERR
+      _                     => die
 
   -----------
   -- Patterns
@@ -198,10 +189,6 @@ parameters {auto sk : SK q}
 -- pattern p LAMBDA     sx          = sx:<p:>LAMBDA_PAT
 -- pattern p st sx = err st sx
 
-  export
-  openPattern : BytePos -> STACK -> F1 q Lexer
--- openPattern b st sx = sx:>st:<b:<[<]:>PATTERN
---
 -- export
 -- closePattern : StateTrans STATE
 -- closePattern PATTERN (sx:>st:<_:<sp)     = pattern (PT $ sp <>> []) st sx
@@ -215,41 +202,35 @@ parameters {auto sk : SK q}
 
   --------
   -- Types
---
--- export
--- typename : ByteBounded VarName -> StateTrans STATE
--- typename v ALIAS sx = sx:<v:>ALIAS_TYPENAME
--- typename _ st    sx = err st sx
 
--- endType : StateTrans STATE
--- endType TYPE_SEQ (sx:<ss:<s) = sx:<tpeAppAll ss s:>TYPE
--- endType st   sx              = err st sx
 
   export
   typeAtom : RawTpe -> STACK -> F1 q Lexer
--- typeAtom t TYPE_ARROW (sx:<ss:<s) = sx:<(ss:<s):<t:>TYPE_SEQ
--- typeAtom t st         sx          = sx:>st:<[<]:<t:>TYPE_SEQ
+  typeAtom t (TpeSeq p st s) = putStackAs (TpeSeq p (st:<s) t) ARROW
+  typeAtom t p               = putStackAs (TpeSeq p [<] t) ARROW
 
--- export
--- dot : StateTrans STATE
--- dot TYPE_SEQ (sx:>LAMBDA_COLON:<ss:<s) = sx:<(tpeAppAll ss s):>LAMBDA_DOT
--- dot st       sx                        = err st sx
---
--- export
--- typeSemicolon : StateTrans STATE
--- typeSemicolon st sx =
---   case endType st sx of
---     sx:<sd:<b:>ALIAS_COLON:<t:>TYPE => sx:<(sd:<Alias b.bounds b.val t):>TOP
---     sx:<sd:<b:>DECL_COLON:<t:>TYPE  => sx:<(sd:<Decl b.bounds b.val t):>TOP
---     _ => err st sx
+  export
+  dot : STACK -> F1 q Lexer
+  dot s =
+    case endType s of
+      Tpe (LamPat s p x) t => putStackAs (LamTpe s p x t) TERM
+      _                    => die
 
--- export
--- closeType : StateTrans STATE
--- closeType st sx =
---   case endType st sx of
---     sx:>st:<b:>TYPE_OPEN:<t:>TYPE => typeAtom t st sx
---     _ => err st sx
---
+  export
+  typeSemicolon : STACK -> F1 q Lexer
+  typeSemicolon s =
+    case endType s of
+      Tpe (TopFun p b) t => pushDecl (Decl b.bounds b.val t) p
+      Tpe (Alias p b)  t => pushDecl (Alias b.bounds b.val t) p
+      _                  => die
+
+  export
+  closeType : STACK -> F1 q Lexer
+  closeType s =
+    case endType s of
+      Tpe (OpnTpe p _) t => typeAtom t p
+      _                  => die
+
 -- export
 -- endRecordTypeField : StateTrans STATE
 -- endRecordTypeField st sx =
@@ -270,31 +251,19 @@ parameters {auto sk : SK q}
 --   case endRecordTypeField st sx of
 --     sx:>st:<b:<sp:>RECORD_TYPE => typeAtom (PRec (b<+>b2) (sp<>>[])) st sx
 --     _ => err st sx
---
--- export
--- arrow : StateTrans STATE
--- arrow TYPE_SEQ sx = sx:>TYPE_ARROW
--- arrow st       sx = err st sx
+
+  export
+  placeholder : STACK -> F1 q Lexer
+  placeholder s = die
+  -- placeholder LAMBDA      sx = pattern (PV PH) LAMBDA sx
+  -- placeholder LET         sx = pattern (PV PH) LET sx
+  -- placeholder LETREC      sx = sx:<PH:>LETREC_VAR
+  -- placeholder PATTERN_EQ  sx = pattern (PV PH) PATTERN_EQ sx
+  -- placeholder st          sx = err st sx
 
   export
   var : ByteBounded VarName -> STACK -> F1 q Lexer
--- var v LAMBDA             sx = pattern (PV $ NM v.val) LAMBDA sx
--- var v LET                sx = pattern (PV $ NM v.val) LET sx
--- var v LETREC             sx = sx:<NM v.val:>LETREC_VAR
--- var v TOP                sx = sx:<v:>TOP_FUNNAME
--- var v PATTERN            sx = sx:<v:>PATTERN_FIELD
--- var v PATTERN_COMMA      sx = sx:<v:>PATTERN_FIELD
--- var v PATTERN_EQ         sx = pattern (PV $ NM v.val) PATTERN_EQ sx
--- var v RECORD             sx = sx:<v.val:>RECORD_FIELD
--- var v RECORD_COMMA       sx = sx:<v.val:>RECORD_FIELD
--- var v RECORD_TYPE        sx = sx:<v.val:>RECORD_TYPE_FIELD
--- var v RECORD_TYPE_COMMA  sx = sx:<v.val:>RECORD_TYPE_FIELD
--- var v st                 sx = atom (PVar v.bounds v.val) st sx
---
-  export
-  placeholder : STACK -> F1 q Lexer
--- placeholder LAMBDA      sx = pattern (PV PH) LAMBDA sx
--- placeholder LET         sx = pattern (PV PH) LET sx
--- placeholder LETREC      sx = sx:<PH:>LETREC_VAR
--- placeholder PATTERN_EQ  sx = pattern (PV PH) PATTERN_EQ sx
--- placeholder st          sx = err st sx
+  var b (Top sx)           = putStackAs (TopFun (Top sx) b) TOP_SEP
+  var b (Record x y sx)    = putStackAs (RecordFld x y sx b.val) EQ
+  var b (RecordTpe x y sx) = putStackAs (RecordTpeFld x y sx b.val) COLON
+  var b s                  = onAtom (PVar b.bounds b.val) s
