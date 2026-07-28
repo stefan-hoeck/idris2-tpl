@@ -8,236 +8,97 @@ import public TPL.Lambda.Typed.Declaration
 %default total
 %hide Data.Linear.(.)
 
---------------------------------------------------------------------------------
--- Parser Stack
---------------------------------------------------------------------------------
-
-PSz : Bits32
-PSz = 1 + cast (conIndexSTATE ERR)
-
-inBoundsSTATE : (s : STATE ts) -> (cast (conIndexSTATE s) < PSz) === True
-
-export %inline
-Cast (STATE ts) (Index PSz) where
-  cast v = I (cast $ conIndexSTATE v) @{mkLT $ inBoundsSTATE v}
-
-public export
-0 SK : Type -> Type
-SK = DStack STATE TpeErr
-
-lamErr : List String -> SK q -> F1 q LamErr
-lamErr ss sk = T1.do
-  st <- getStack
-  case openBounds st of
-    Just (BB p _,s) => push1 (positions sk) p >> unclosedIfEOI s ss sk
-    _               => unexpected ss sk
-
-perr : Arr32 PSz (SK q -> F1 q LamErr)
-perr = arr32 PSz (lamErr []) []
-
-onerr : STATE st -> SK q => F1 q (Index PSz)
-onerr st @{sk} = T1.do
- let eo      := at perr (cast st)
- err <- eo sk
- failWith err (cast ERR)
-
-%inline
-dtrans : SK q => StateTrans STATE -> F1 q (Index PSz)
-dtrans f t =
- let (sx:>st) # t := getStack t
-  in case f st sx of
-       _:>ERR     => onerr st t
-       sx@(_:>st) => putStackAs sx (cast st) t
-
-vars : Steps q PSz SK
-vars =
-     step "if" (bounds >>= dtrans . if')
-  :: step "then" (dtrans then')
-  :: step "else" (dtrans else')
-  :: step "let" (bounds >>= dtrans . let')
-  :: step "letrec" (bounds >>= dtrans . letrec')
-  :: step "in" (dtrans in')
-  :: varName (dtrans . var)
-
-atoms : Steps q PSz SK
-atoms =
-     step '(' (bounds >>= dtrans . openTerm)
-  :: step '{' (bounds >>= dtrans . openRecord)
-  :: step "unit" (bounds >>= dtrans . atom . unit)
-  :: bools (\b => bounded' b >>= dtrans . atom . bool)
-  ++ nats  (\b => bounded' b >>= dtrans . atom . int)
-  ++ vars
-
-terms : DFA q PSz SK
-terms = spaced $ step ('\\' <|> 'λ') (bounds >>= dtrans . lambda) :: atoms
-
 field : ByteString -> VarName
 field bs = VN (toString $ drop 1 bs)
 
-atomOrClose : DFA q PSz SK
-atomOrClose =
-  spaced $
-       step ';' (dtrans termSemicolon)
-    :: step ')' (dtrans closeTerm)
-    :: step '}' (bounds >>= dtrans . closeRecord)
-    :: step ',' (dtrans recordComma)
-    :: bytes proj (\b => bounded' (field b) >>= dtrans . projection)
-    :: atoms
+vars : Steps q Lexers SK
+vars =
+     step "if" (failUnexpected [] ERR)
+  :: step "then" (failUnexpected [] ERR)
+  :: step "else" (failUnexpected [] ERR)
+  :: step "let" (failUnexpected [] ERR)
+  :: step "letrec" (failUnexpected [] ERR)
+  :: step "in" (failUnexpected [] ERR)
+  :: varName (withStack . var)
 
-typeAtoms : DFA q PSz SK
-typeAtoms =
-  spaced $
-       step "(" (bounds >>= dtrans . openType)
-    :: step "{" (bounds >>= dtrans . openRecordType)
-    :: upperName (dtrans . typeAtom . pvar)
+atoms : Steps q Lexers SK
+atoms =
+     step '(' (posModStack SK OpnTrm TERM)
+  :: step '{' (posModStack SK record' VAR)
+  :: step "unit" (boundsWithStack $ onAtom . unit)
+  :: bools (boundedWithStack $ onAtom . bool)
+  ++ nats  (boundedWithStack $ onAtom . int)
+  ++ vars
 
-afterType : DFA q PSz SK
-afterType =
-  spaced
-    [ step ')' (dtrans closeType)
-    , step '}' (bounds >>= dtrans . closeRecordType)
-    , step '.' (dtrans dot)
-    , step ',' (dtrans recordTypeComma)
-    , step ';' (dtrans typeSemicolon)
-    , step '=' (dtrans eq)
-    , step "->" (dtrans arrow)
-    ]
+bindsteps : Steps q Lexers SK
+bindsteps = step '_' (withStack placeholder) :: vars
 
-top : DFA q PSz SK
-top =
-  spaced $
-       step "%alias" (dtrans alias)
-    :: step "%eval" (dtrans eval)
-    :: vars
-
-bindsteps : Steps q PSz SK
-bindsteps = step '_' (dtrans placeholder) :: vars
-
-bindvars : DFA q PSz SK
-bindvars = spaced bindsteps
-
-startPattern : DFA q PSz SK
-startPattern =
-  spaced $
-       step '{' (bounds >>= dtrans . openPattern)
-    :: bindsteps
-
-ptrans : Lex1 q PSz SK
+ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ entry TOP               top
+    [ E TOP $ spaced $
+           step' "%alias" ALIAS_NAME
+        :: step "%eval" (modStackAs SK Eval TERM)
+        :: vars
+    , E TOP_SEP $ spaced $ [step' '=' TERM, step' ':' TYPE]
+    , E TERM $ spaced $
+           step lambda (posModStack SK Lam PATTERN)
+        :: step "if" (posModStack SK If TERM)
+        :: step "let" (posModStack SK Let PATTERN)
+        :: step "letrec" (posModStack SK Letrec BINDNAME)
+        :: atoms
+    , E ATOM $ spaced atoms
+    , E ATOM_OR_CLOSE $ spaced $
+           step ';' (withStack termSemicolon)
+        :: step ')' (withStack closeTerm)
+        :: step '}' (posWithStack closeRecord)
+        :: step ',' (withStack recordComma)
+        :: step "else" (withStack else')
+        :: step "then" (withStack then')
+        :: step "in" (withStack in')
+        :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
+        :: atoms
+    , E EQ $ spaced [step' '=' TERM]
 
-    , entry TOP_FUNNAME       $ spaced [step '=' (dtrans eq), step ':' (dtrans colon)]
-    , entry DECL_COLON        typeAtoms
-    , entry DEFN_EQ           terms
+    , E VAR $ spaced vars
+    , E BINDNAME $ spaced bindsteps
+    , E PATTERN $ spaced $ step '{' (posModStack SK pat PAT_NEW) :: bindsteps
+    , E PAT_NEW $ spaced $ step '}' (withStack closePattern) :: vars
+    , E PAT_EQ $ spaced [step' '=' PATTERN]
+    , E PAT_END $ spaced [step' ',' VAR, step '}' (withStack closePattern)]
 
-    , entry EVAL              terms
+    , E TYPE $ spaced $
+          step "(" (posModStack SK OpnTpe TYPE)
+       :: step "{" (posModStack SK recordTpe VAR)
+       :: upperName (withStack . typeAtom . pvar)
 
-    , entry ALIAS             $ spaced $ upperName (dtrans . typename)
-    , entry ALIAS_TYPENAME    $ spaced [step ':' (dtrans colon)]
-    , entry ALIAS_COLON       typeAtoms
-
-    , entry LAMBDA            startPattern
-    , entry LAMBDA_PAT        $ spaced [step ':' (dtrans colon)]
-    , entry LAMBDA_COLON      typeAtoms
-    , entry LAMBDA_DOT        terms
-
-    , entry LET               startPattern
-    , entry LET_PAT           $ spaced [step '=' (dtrans eq)]
-    , entry LET_EQ            terms
-    , entry LET_IN            terms
-    , entry LETREC            bindvars
-    , entry LETREC_VAR        $ spaced [step ':' (dtrans colon)]
-    , entry LETREC_COLON      typeAtoms
-    , entry LETREC_EQ         terms
-    , entry LETREC_IN         terms
-
-    , entry PATTERN           $ spaced $ step '}' (dtrans closePattern) :: vars
-    , entry PATTERN_FIELD     $ spaced [step '=' (dtrans eq)]
-    , entry PATTERN_EQ        startPattern
-    , entry PATTERN_PAT       $ spaced [step '}' (dtrans closePattern), step ',' (dtrans patternComma)]
-    , entry PATTERN_COMMA     $ spaced vars
-
-    , entry APP               atomOrClose
-    , entry TERM_OPEN         terms
-    , entry SEQ               terms
-
-    , entry IF                terms
-    , entry THEN              terms
-    , entry ELSE              terms
-
-    , entry RECORD            $ spaced vars
-    , entry RECORD_FIELD      $ spaced [step '=' (dtrans eq)]
-    , entry RECORD_COMMA      $ spaced vars
-    , entry RECORD_EQ         terms
-
-    , entry TYPE_SEQ          afterType
-    , entry TYPE_ARROW        typeAtoms
-    , entry TYPE_OPEN         typeAtoms
-    , entry RECORD_TYPE       $ spaced vars
-    , entry RECORD_TYPE_FIELD $ spaced [step ':' (dtrans colon)]
-    , entry RECORD_TYPE_COMMA $ spaced vars
-    , entry RECORD_TYPE_COLON typeAtoms
+    , E ALIAS_NAME $ spaced $ upperName (withStack . alias)
+    , E COLON $ spaced [step' ':' TYPE]
+    , E ARROW $ spaced $
+        [ step' "->" TYPE
+        , step ')' (withStack closeType)
+        , step '}' (posWithStack closeRecordType)
+        , step '.' (withStack dot)
+        , step ';' (withStack typeSemicolon)
+        , step '=' (withStack typeEq)
+        , step ',' (withStack typeComma)
+        ]
     ]
 
-peoi : Index PSz -> SK q -> F1 q (Either LamErr $ List Declaration)
+perr : Arr32 Lexers (SK q -> F1 q LamErr)
+perr =
+  arr32 Lexers (unexpected [])
+    [ E DOT $ unexpected ["."]
+    , E EQ  $ unexpected ["="]
+    ]
+
+peoi : Lexer -> SK q -> F1 q (Either LamErr $ List Declaration)
 peoi st sk t =
  let sx # t := read1 sk.stack_ t
   in case sx of
-       [<sd]:>TOP => Right (sd <>> []) # t
-       _          => arrFail SK perr st sk t
+       Top sd => Right (sd <>> []) # t
+       _      => arrFail SK perr st sk t
 
 public export
 decls : P1 q LamErr (List Declaration)
-decls = P (cast TOP) (init $ [<[<]]:>TOP) ptrans (\x => (Nothing #)) perr peoi
-
---------------------------------------------------------------------------------
--- Proofs
---------------------------------------------------------------------------------
-
-inBoundsSTATE TOP                     = Refl
-inBoundsSTATE TOP_FUNNAME             = Refl
-inBoundsSTATE DECL_COLON              = Refl
-inBoundsSTATE DEFN_EQ                 = Refl
-inBoundsSTATE EVAL                    = Refl
-inBoundsSTATE ALIAS                   = Refl
-inBoundsSTATE ALIAS_TYPENAME          = Refl
-inBoundsSTATE ALIAS_COLON             = Refl
-inBoundsSTATE LAMBDA                  = Refl
-inBoundsSTATE LAMBDA_PAT              = Refl
-inBoundsSTATE LAMBDA_COLON            = Refl
-inBoundsSTATE LAMBDA_DOT              = Refl
-inBoundsSTATE LET                     = Refl
-inBoundsSTATE LET_PAT                 = Refl
-inBoundsSTATE LET_EQ                  = Refl
-inBoundsSTATE LET_IN                  = Refl
-inBoundsSTATE LETREC                  = Refl
-inBoundsSTATE LETREC_VAR              = Refl
-inBoundsSTATE LETREC_COLON            = Refl
-inBoundsSTATE LETREC_EQ               = Refl
-inBoundsSTATE LETREC_IN               = Refl
-inBoundsSTATE PATTERN                 = Refl
-inBoundsSTATE PATTERN_FIELD           = Refl
-inBoundsSTATE PATTERN_EQ              = Refl
-inBoundsSTATE PATTERN_PAT             = Refl
-inBoundsSTATE PATTERN_COMMA           = Refl
-inBoundsSTATE TERM                    = Refl
-inBoundsSTATE APP                     = Refl
-inBoundsSTATE TERM_OPEN               = Refl
-inBoundsSTATE SEQ                     = Refl
-inBoundsSTATE IF                      = Refl
-inBoundsSTATE THEN                    = Refl
-inBoundsSTATE ELSE                    = Refl
-inBoundsSTATE RECORD                  = Refl
-inBoundsSTATE RECORD_FIELD            = Refl
-inBoundsSTATE RECORD_EQ               = Refl
-inBoundsSTATE RECORD_COMMA            = Refl
-inBoundsSTATE TYPE                    = Refl
-inBoundsSTATE TYPE_SEQ                = Refl
-inBoundsSTATE TYPE_ARROW              = Refl
-inBoundsSTATE TYPE_OPEN               = Refl
-inBoundsSTATE RECORD_TYPE             = Refl
-inBoundsSTATE RECORD_TYPE_FIELD       = Refl
-inBoundsSTATE RECORD_TYPE_COLON       = Refl
-inBoundsSTATE RECORD_TYPE_COMMA       = Refl
-inBoundsSTATE ERR                     = Refl
+decls = P TOP (init $ Top [<]) ptrans (\x => (Nothing #)) perr peoi

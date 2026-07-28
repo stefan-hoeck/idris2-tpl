@@ -89,7 +89,7 @@ atoms =
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ E TERM $ spaced $ step ('\\' <|> 'λ') (boundsWithStack onLambda) :: atoms
+    [ E TERM $ spaced $ step lambda (boundsWithStack onLambda) :: atoms
     , E ATOM $ spaced $ close ')' (withStack onClose) :: atoms
     , E VAR  $ spaced $ varName (withStack . onVar)
     , E DOT  $ spaced [step' '.' TERM]

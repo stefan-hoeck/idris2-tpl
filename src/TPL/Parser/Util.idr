@@ -1,5 +1,6 @@
 module TPL.Parser.Util
 
+import public Data.DPair
 import public TPL.Name
 import public Text.ILex
 import public Text.ILex.DStack
@@ -43,6 +44,10 @@ uident = upper >> star identchar
 export
 linecomment : RExp True
 linecomment = "--" >> star dot
+
+export
+lambda : RExp True
+lambda = '\\' <|> 'λ'
 
 --------------------------------------------------------------------------------
 -- Literals
@@ -89,3 +94,26 @@ parameters {auto hb : HasBytes s}
   export %inline
   spaced : Steps q r s -> DFA q r s
   spaced ss = dfa $ jsonSpaced (ignore linecomment :: ss)
+
+parameters {auto hs : HasStack s (Exists p)}
+           {auto sk : s q}
+
+  export %inline
+  eputAs : p x -> a -> F1 q a
+  eputAs v r = putStackAs (Evidence _ v) r
+
+  export %inline
+  ewithStack : ({0 x : _} -> p x -> F1 q a) -> F1 q a
+  ewithStack f = withStack $ \(Evidence _ v) => f v
+
+parameters {auto hs : HasStack s (Exists p)}
+           {auto sk : s q}
+           {auto hb : HasBytes s}
+
+  export %inline
+  eboundsWithStack : ({0 x : _} -> ByteBounds -> p x -> F1 q b) -> F1 q b
+  eboundsWithStack f = bounds >>= \b => ewithStack (f b)
+
+  export %inline
+  eboundedWithStack : ({0 x : _} -> ByteBounded a -> p x -> F1 q b) -> a -> F1 q b
+  eboundedWithStack f v = bounds >>= \b => ewithStack (f $ B v b)

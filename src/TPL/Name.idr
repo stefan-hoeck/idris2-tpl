@@ -2,6 +2,7 @@ module TPL.Name
 
 import Decidable.HDecEq
 import Derive.Prelude
+import Text.ByteBounds
 
 %default total
 %language ElabReflection
@@ -12,6 +13,10 @@ record VarName where
   name : String
 
 %runElab derive "VarName" [Show,Eq,Ord,FromString,Semigroup,Monoid]
+
+export %inline
+Cast a VarName => Cast (ByteBounded a) VarName where
+  cast = cast . val
 
 export
 machineName : Nat -> VarName
@@ -38,3 +43,7 @@ export
 Interpolation BindName where
   interpolate PH     = "_"
   interpolate (NM v) = interpolate v
+
+export %inline
+Cast a VarName => Cast a BindName where
+  cast = NM . cast
