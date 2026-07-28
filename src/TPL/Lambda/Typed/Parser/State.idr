@@ -10,7 +10,7 @@ import public TPL.Lambda.Typed.Declaration
 
 %runElab deriveParserState "Lexers" "Lexer"
   [ "TOP", "TOP_SEP", "TERM", "ATOM", "ATOM_OR_CLOSE", "DOT", "EQ"
-  , "VAR", "BINDNAME", "PATTERN"
+  , "VAR", "BINDNAME", "PATTERN", "PAT_NEW", "PAT_EQ", "PAT_END"
   , "TYPE", "ARROW", "ALIAS_NAME", "COLON"
   , "ERR"
   ]
@@ -160,8 +160,8 @@ parameters {auto sk : SK q}
   projection : ByteBounded VarName -> STACK -> F1 q Lexer
   projection b (App p s ss) =
     case ss of
-      i:<l => putStackAs (App p s $ i:<field l b) ATOM
-      [<]  => putStackAs (App p (field s b) [<]) ATOM
+      i:<l => putStackAs (App p s $ i:<field l b) ATOM_OR_CLOSE
+      [<]  => putStackAs (App p (field s b) [<]) ATOM_OR_CLOSE
   projection _ _ = die
 
   export
@@ -185,26 +185,6 @@ parameters {auto sk : SK q}
       Term (LetPat p b x) y      => putStackAs (LetTrm p b x y) TERM
       Term (LetrecTpe p b x t) y => putStackAs (LetrecTrm p b x t y) TERM
       _                          => die
-
-  -----------
-  -- Patterns
-
--- pattern : Pattern -> StateTrans STATE
--- pattern p PATTERN_EQ (sx:<sp:<f) = sx:<(sp:<(f,p)):>PATTERN_PAT
--- pattern p LET        sx          = sx:<p:>LET_PAT
--- pattern p LAMBDA     sx          = sx:<p:>LAMBDA_PAT
--- pattern p st sx = err st sx
-
--- export
--- closePattern : StateTrans STATE
--- closePattern PATTERN (sx:>st:<_:<sp)     = pattern (PT $ sp <>> []) st sx
--- closePattern PATTERN_PAT (sx:>st:<_:<sp) = pattern (PT $ sp <>> []) st sx
--- closePattern st sx = err st sx
---
--- export
--- patternComma : StateTrans STATE
--- patternComma PATTERN_PAT sx = sx:>PATTERN_COMMA
--- patternComma st          sx = err st sx
 
   --------
   -- Types
@@ -257,15 +237,19 @@ parameters {auto sk : SK q}
       Tpe (RecordTpeFld p x sp f) t => typeAtom (PRec (BB x y) (sp<>>[(f,t)])) p
       _                             => die
 
+  -----------
+  -- Patterns
+
+  pattern : Pattern -> STACK -> F1 q Lexer
+  pattern p (Lam s x)         = putStackAs (LamPat s x p) COLON
+  pattern p (Let s x)         = putStackAs (LetPat s x p) EQ
+  pattern p (PatFld s x sp f) = putStackAs (Pat s x $ sp:<(f, p)) PAT_END
+  pattern _ _                 = die
 
   export
   placeholder : STACK -> F1 q Lexer
-  placeholder s = die
-  -- placeholder LAMBDA      sx = pattern (PV PH) LAMBDA sx
-  -- placeholder LET         sx = pattern (PV PH) LET sx
-  -- placeholder LETREC      sx = sx:<PH:>LETREC_VAR
-  -- placeholder PATTERN_EQ  sx = pattern (PV PH) PATTERN_EQ sx
-  -- placeholder st          sx = err st sx
+  placeholder (Letrec s x) = putStackAs (LetrecVar s x $ cast PH) COLON
+  placeholder s            = pattern (cast PH) s
 
   export
   var : ByteBounded VarName -> STACK -> F1 q Lexer
@@ -275,4 +259,11 @@ parameters {auto sk : SK q}
   var b (Lam s x)          = putStackAs (LamPat s x $ cast b) COLON
   var b (Letrec s x)       = putStackAs (LetrecVar s x $ cast b) COLON
   var b (Let s x)          = putStackAs (LetPat s x $ cast b) EQ
+  var b (Pat s p sp)       = putStackAs (PatFld s p sp b) PAT_EQ
+  var b (PatFld s p sp f)  = putStackAs (Pat s p $ sp:<(f, cast b)) PAT_END
   var b s                  = onAtom (PVar b.bounds b.val) s
+
+  export
+  closePattern : STACK -> F1 q Lexer
+  closePattern (Pat s p sp) = pattern (PT $ sp <>> []) s
+  closePattern _            = die

@@ -62,7 +62,10 @@ ptrans =
 
     , E VAR $ spaced vars
     , E BINDNAME $ spaced bindsteps
-    , E PATTERN $ spaced $ step '{' (posModStack SK pat VAR) :: bindsteps
+    , E PATTERN $ spaced $ step '{' (posModStack SK pat PAT_NEW) :: bindsteps
+    , E PAT_NEW $ spaced $ step '}' (withStack closePattern) :: vars
+    , E PAT_EQ $ spaced [step' '=' PATTERN]
+    , E PAT_END $ spaced [step' ',' VAR, step '}' (withStack closePattern)]
 
     , E TYPE $ spaced $
           step "(" (posModStack SK OpnTpe TYPE)
