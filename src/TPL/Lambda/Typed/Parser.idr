@@ -19,12 +19,14 @@ vars =
   :: step "let" (failUnexpected [] ERR)
   :: step "letrec" (failUnexpected [] ERR)
   :: step "in" (failUnexpected [] ERR)
+  :: step "as" (failUnexpected [] ERR)
   :: varName (withStack . var)
 
 atoms : Steps q Lexers SK
 atoms =
      step '(' (posModStack SK OpnTrm TERM)
   :: step '{' (posModStack SK record' VAR)
+  :: step '<' (posModStack SK Sum VAR)
   :: step "unit" (boundsWithStack $ onAtom . unit)
   :: bools (boundedWithStack $ onAtom . bool)
   ++ nats  (boundedWithStack $ onAtom . int)
@@ -52,10 +54,12 @@ ptrans =
            step ';' (withStack termSemicolon)
         :: step ')' (withStack closeTerm)
         :: step '}' (posWithStack closeRecord)
+        :: step '>' (posWithStack closeSum)
         :: step ',' (withStack recordComma)
         :: step "else" (withStack else')
         :: step "then" (withStack then')
         :: step "in" (withStack in')
+        :: step "as" (withStack as)
         :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
         :: atoms
     , E EQ $ spaced [step' '=' TERM]
@@ -84,6 +88,9 @@ ptrans =
         , step ';' (withStack typeSemicolon)
         , step '=' (withStack typeEq)
         , step ',' (withStack typeComma)
+        , step "else" (withStack $ else' . endAs)
+        , step "then" (withStack $ then' . endAs)
+        , step "in" (withStack $ in' . endAs)
         ]
     ]
 

@@ -229,6 +229,11 @@ parameters (env : Env Entry)
         Just (Def _ ct) => check m b (embed ct)
         _               => bindErr b v
 
+  tc m (TAs b t rt) = Prelude.do
+    tp <- resolveTpe rt
+    tt <- tc (Just tp) t
+    check m b tt
+
   tc m (TField b x v) = Prelude.do
     (TRec ps ** x2) <- tc Nothing x | (t ** _) => notField v t
     case isField v.val ps of
@@ -280,6 +285,8 @@ parameters (env : Env Entry)
   tc m (TRec b y)    = Prelude.do
     (ps ** r) <- tcrec y
     check m b (SRec b r)
+
+  tc m (TSum b v t) = unsupported b
 
   tc m (TIf b i y e)  = Prelude.do
     si <- tc {sc} (Just TBool) i
