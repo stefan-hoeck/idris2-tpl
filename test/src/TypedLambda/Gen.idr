@@ -27,6 +27,7 @@ notKeyword "else"   = "else_"
 notKeyword "let"    = "let_"
 notKeyword "letrec" = "letrec_"
 notKeyword "in"     = "in_"
+notKeyword "as"     = "as_"
 notKeyword s        = VN s
 
 export
@@ -105,6 +106,9 @@ term = go 5
     rec : Nat -> Gen PTerm
     rec k = PRec NoBB <$> list (linear 1 5) [| (varname, go k) |]
 
+    sum : Nat -> Gen PTerm
+    sum k = [| PSum bb (bounded varname) (go k) |]
+
     go 0     = prim
     go (S k) =
       frequency
@@ -116,6 +120,8 @@ term = go 5
         , (2, [| PLetrec bb bindname tpe (go k) (go k) |])
         , (2, [| PField bb (go k) (bounded varname) |])
         , (2, rec k)
+        , (2, sum k)
+        , (2, [| PAs bb (go k) tpe |])
         ]
 
 export

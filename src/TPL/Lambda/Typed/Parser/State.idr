@@ -31,6 +31,7 @@ data STACK : Type where
   Alias               : STACK -> ByteBounded VarName -> STACK
 
   App                 : STACK -> PTerm -> SnocList PTerm -> STACK
+  As                  : STACK -> PTerm -> SnocList PTerm -> STACK
   Term                : STACK -> PTerm -> STACK
 
   Lam                 : STACK -> BytePos -> STACK
@@ -52,6 +53,8 @@ data STACK : Type where
 
   Record              : STACK -> BytePos -> SnocList RecField -> STACK
   RecordFld           : STACK -> BytePos -> SnocList RecField -> VarName -> STACK
+  Sum                 : STACK -> BytePos -> STACK
+  SumFld              : STACK -> BytePos -> ByteBounded VarName -> STACK
 
   Pat                 : STACK -> BytePos -> SnocList PatField -> STACK
   PatFld              : STACK -> BytePos -> SnocList PatField -> ByteBounded VarName -> STACK
@@ -103,6 +106,17 @@ endApp s            = Err
 endType : STACK -> STACK
 endType (TpeSeq p ss s) = Tpe p (tpeAppAll ss s)
 endType _               = Err
+
+setAs : STACK -> PTerm -> SnocList PTerm -> RawTpe -> STACK
+setAs p x [<]     rt = App p (PAs (cast x <+> cast rt) x rt) [<]
+setAs p x (sy:<y) rt = App p x $ sy:<PAs (cast y <+> cast rt) x rt
+
+export
+endAs : STACK -> STACK
+endAs s =
+  case endType s of
+    Tpe (As p x sx) tp => setAs p x sx tp
+    _                  => Err
 
 --------------------------------------------------------------------------------
 -- State Transitions
@@ -156,6 +170,13 @@ parameters {auto sk : SK q}
       _                           => die
 
   export
+  closeSum : BytePos -> STACK -> F1 q Lexer
+  closeSum y s =
+    case endApp s of
+      Term (SumFld s x f) t => onAtom (PSum (BB x y) f t) s
+      _                     => die
+
+  export
   recordComma : STACK -> F1 q Lexer
   recordComma s =
     case endApp s of
@@ -192,6 +213,11 @@ parameters {auto sk : SK q}
       Term (LetrecTpe p b x t) y => putStackAs (LetrecTrm p b x t y) TERM
       _                          => die
 
+  export
+  as : STACK -> F1 q Lexer
+  as (App p x sx) = putStackAs (As p x sx) TYPE
+  as _            = die
+
   --------
   -- Types
 
@@ -213,6 +239,7 @@ parameters {auto sk : SK q}
     case endType s of
       Tpe (TopFun p b) t => pushDecl (Decl b.bounds b.val t) p
       Tpe (Alias p b)  t => pushDecl (Alias b.bounds b.val t) p
+      Tpe (As p x sx)  t => termSemicolon (setAs p x sx t)
       _                  => die
 
   export
@@ -221,6 +248,7 @@ parameters {auto sk : SK q}
     case endType s of
       Tpe (RecordTpeFld p b ps f) t => putStackAs (RecordTpe p b $ ps:<(f,t)) VAR
       Tpe (SumTpeFld p b ps f) t    => putStackAs (SumTpe p b $ ps:<(f,t)) VAR
+      Tpe (As p x sx) t             => recordComma (setAs p x sx t)
       _                             => die
 
   export
@@ -228,6 +256,7 @@ parameters {auto sk : SK q}
   closeType s =
     case endType s of
       Tpe (OpnTpe p _) t => typeAtom t p
+      Tpe (As p x sx) t  => closeTerm (setAs p x sx t)
       _                  => die
 
   export
@@ -242,6 +271,7 @@ parameters {auto sk : SK q}
   closeRecordType y s =
     case endType s of
       Tpe (RecordTpeFld p x sp f) t => typeAtom (PRec (BB x y) (sp<>>[(f,t)])) p
+      Tpe (As p x sx) t             => closeRecord y (setAs p x sx t)
       _                             => die
 
   export
@@ -249,6 +279,7 @@ parameters {auto sk : SK q}
   closeSumType y s =
     case endType s of
       Tpe (SumTpeFld p x sp f) t => typeAtom (PSum (BB x y) (sp<>>[(f,t)])) p
+      Tpe (As p x sx) t          => closeSum y (setAs p x sx t)
       _                          => die
 
   -----------
@@ -270,6 +301,7 @@ parameters {auto sk : SK q}
   var b (Top sx)           = putStackAs (TopFun (Top sx) b) TOP_SEP
   var b (Record x y sx)    = putStackAs (RecordFld x y sx b.val) EQ
   var b (RecordTpe x y sx) = putStackAs (RecordTpeFld x y sx b.val) COLON
+  var b (Sum x y)          = putStackAs (SumFld x y b) EQ
   var b (SumTpe x y sx)    = putStackAs (SumTpeFld x y sx b.val) COLON
   var b (Lam s x)          = putStackAs (LamPat s x $ cast b) COLON
   var b (Letrec s x)       = putStackAs (LetrecVar s x $ cast b) COLON

@@ -12,6 +12,9 @@ data Term : Type where
   ||| Variables
   TVar   : ByteBounds -> (v : VarName) -> Term
 
+  ||| Type annotations
+  TAs   : ByteBounds -> (t : Term) -> (tp : RawTpe) -> Term
+
   ||| Record field projection
   TField : ByteBounds -> Term -> ByteBounded VarName -> Term
 
@@ -39,6 +42,9 @@ data Term : Type where
   ||| record constructor
   TRec   : ByteBounds -> List (VarName, Term) -> Term
 
+  ||| record constructor
+  TSum   : ByteBounds -> ByteBounded VarName -> Term -> Term
+
   ||| `if ... then ... else` function. Eventually, this could be
   ||| desugared into a pattern match on bools.
   TIf    : ByteBounds -> (i,t,e : Term) -> Term
@@ -52,6 +58,7 @@ FromString Term where
 export
 Cast Term ByteBounds where
   cast (TVar b _)          = b
+  cast (TAs b _ _)         = b
   cast (TField b _ _)      = b
   cast (TLam b _ _ _)      = b
   cast (TLet b _ _ _)      = b
@@ -59,6 +66,7 @@ Cast Term ByteBounds where
   cast (TApp b _ _)        = b
   cast (TPrim b _)         = b
   cast (TRec b _)          = b
+  cast (TSum b _ _)        = b
   cast (TIf b _ _ _)       = b
 
 unpats :
@@ -90,6 +98,7 @@ desugarRec : List (VarName,PTerm) -> List (VarName,Term)
 export
 desugar : PTerm -> Term
 desugar (PVar b v)           = TVar b v
+desugar (PAs b t tp)         = TAs b (desugar t) tp
 desugar (PField b y v)       = TField b (desugar y) v
 desugar (PLam b p t sc)      =
  let v      := machineName 0
@@ -102,6 +111,7 @@ desugar (PLetrec b v t y sc) = TLetrec b v t (desugar y) (desugar sc)
 desugar (PApp b t s)         = TApp b (desugar t) (desugar s)
 desugar (PPrim b y)          = TPrim b y
 desugar (PRec b xs)          = TRec b (desugarRec xs)
+desugar (PSum b v t)         = TSum b v (desugar t)
 desugar (PIf b i t e)        = TIf b (desugar i) (desugar t) (desugar e)
 
 desugarRec [] = []
@@ -112,6 +122,7 @@ resugarRec : List (VarName,Term) -> List (VarName,PTerm)
 export
 resugar : Term -> PTerm
 resugar (TVar b v)           = PVar b v
+resugar (TAs b t tp)         = PAs b (resugar t) tp
 resugar (TField b y v)       = PField b (resugar y) v
 resugar (TLam b v t sc)      = PLam b (PV v) t (resugar sc)
 resugar (TLet b p y sc)      = PLet b (PV p) (resugar y) (resugar sc)
@@ -119,6 +130,7 @@ resugar (TLetrec b v t y sc) = PLetrec b v t (resugar y) (resugar sc)
 resugar (TApp b t s)         = PApp b (resugar t) (resugar s)
 resugar (TPrim b y)          = PPrim b y
 resugar (TRec b xs)          = PRec b (resugarRec xs)
+resugar (TSum b v t)         = PSum b v (resugar t)
 resugar (TIf b i t e)        = PIf b (resugar i) (resugar t) (resugar e)
 
 resugarRec [] = []
