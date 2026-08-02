@@ -74,12 +74,16 @@ tpe = go 5
     recType : Nat -> Gen RawTpe
     recType k = PRec NoBB <$> list (linear 1 5) [| (varname, go k) |]
 
+    sumType : Nat -> Gen RawTpe
+    sumType k = PSum NoBB <$> list (linear 1 5) [| (varname, go k) |]
+
     go 0 = tpeVar
     go (S k) =
       frequency
         [ (1,tpeVar)
         , (2,[| PFun bb (go k) (go k) |])
         , (2,recType k)
+        , (2,sumType k)
         ]
 
 export

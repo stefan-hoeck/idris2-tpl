@@ -16,6 +16,7 @@ data RawTpe : Type where
   PVar  : ByteBounds -> VarName -> RawTpe
   PFun  : ByteBounds -> RawTpe -> RawTpe -> RawTpe
   PRec  : ByteBounds -> List (VarName,RawTpe) -> RawTpe
+  PSum  : ByteBounds -> List (VarName,RawTpe) -> RawTpe
 
 %runElab derive "RawTpe" [Show,Eq]
 
@@ -28,6 +29,7 @@ Cast RawTpe ByteBounds where
   cast (PVar b _)   = b
   cast (PFun b _ _) = b
   cast (PRec b _)   = b
+  cast (PSum b _)   = b
 
 export
 MapBounds RawTpe where
@@ -35,6 +37,8 @@ MapBounds RawTpe where
   mapBounds f (PFun b x y) = PFun (f b) (mapBounds f x) (mapBounds f y)
   mapBounds f (PRec b fs)  =
     assert_total $ PRec (f b) (map (mapBounds f) <$> fs)
+  mapBounds f (PSum b fs)  =
+    assert_total $ PSum (f b) (map (mapBounds f) <$> fs)
 
 export
 tpeAppAll : SnocList RawTpe -> RawTpe -> RawTpe
@@ -49,6 +53,7 @@ data Tpe : Type where
   TUnit : Tpe
   TFun  : Tpe -> Tpe -> Tpe
   TRec  : List (VarName,Tpe) -> Tpe
+  TSum  : List (VarName,Tpe) -> Tpe
 
 %runElab derive "Tpe" [Show,Eq]
 
@@ -83,6 +88,7 @@ tpeEq TBool TBool               = Just0 Refl
 tpeEq TUnit TUnit               = Just0 Refl
 tpeEq (TFun a1 r1) (TFun a2 r2) = maybeCong2 TFun (tpeEq a1 a2) (tpeEq r1 r2)
 tpeEq (TRec r1) (TRec r2)       = maybeCong TRec (pairsEq r1 r2)
+tpeEq (TSum r1) (TSum r2)       = maybeCong TSum (pairsEq r1 r2)
 tpeEq _ _                       = Nothing0
 
 pairEq (v1,t1) (v2,t2) = maybeCong2 MkPair (hdecEq v1 v2) (tpeEq t1 t2)
@@ -104,6 +110,7 @@ IType TBool      = Bool
 IType TUnit      = Unit
 IType (TFun x y) = IType x -> IType y
 IType (TRec ps)  = HList (RecTypes ps)
+IType (TSum ps)  = Any Prelude.id (RecTypes ps)
 
 RecTypes []          = []
 RecTypes ((_,t)::ps) = IType t :: RecTypes ps
@@ -119,6 +126,7 @@ Cast Tpe RawTpe where
   cast TUnit      = PVar NoBB "Unit"
   cast (TFun x y) = PFun NoBB (cast x) (cast y)
   cast (TRec ps)  = assert_total $ PRec NoBB (map cast <$> ps)
+  cast (TSum ps)  = assert_total $ PSum NoBB (map cast <$> ps)
 
 --------------------------------------------------------------------------------
 -- Interpolation
@@ -132,6 +140,7 @@ prettyTpe : RawTpe -> String
 prettyTpe (PVar _ v)   = interpolate v
 prettyTpe (PFun _ a r) = "\{paren a} -> \{prettyTpe r}"
 prettyTpe (PRec _ fs)  = "{\{prettyFields [<] fs}}"
+prettyTpe (PSum _ fs)  = "<\{prettyFields [<] fs}>"
 
 paren t@(PFun {}) = "(\{prettyTpe t})"
 paren t           = prettyTpe t

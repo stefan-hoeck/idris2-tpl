@@ -70,6 +70,7 @@ ptrans =
     , E TYPE $ spaced $
           step "(" (posModStack SK OpnTpe TYPE)
        :: step "{" (posModStack SK recordTpe VAR)
+       :: step "<" (posModStack SK sumTpe VAR)
        :: upperName (withStack . typeAtom . pvar)
 
     , E ALIAS_NAME $ spaced $ upperName (withStack . alias)
@@ -78,6 +79,7 @@ ptrans =
         [ step' "->" TYPE
         , step ')' (withStack closeType)
         , step '}' (posWithStack closeRecordType)
+        , step '>' (posWithStack closeSumType)
         , step '.' (withStack dot)
         , step ';' (withStack typeSemicolon)
         , step '=' (withStack typeEq)

@@ -64,12 +64,18 @@ data STACK : Type where
   OpnTpe              : STACK -> BytePos -> STACK
   RecordTpe           : STACK -> BytePos -> SnocList RecTypeField -> STACK
   RecordTpeFld        : STACK -> BytePos -> SnocList RecTypeField -> VarName -> STACK
+  SumTpe              : STACK -> BytePos -> SnocList RecTypeField -> STACK
+  SumTpeFld           : STACK -> BytePos -> SnocList RecTypeField -> VarName -> STACK
 
   Err                 : STACK
 
 export %inline
 recordTpe : STACK -> BytePos -> STACK
 recordTpe s p = RecordTpe s p [<]
+
+export %inline
+sumTpe : STACK -> BytePos -> STACK
+sumTpe s p = SumTpe s p [<]
 
 export %inline
 record' : STACK -> BytePos -> STACK
@@ -214,6 +220,7 @@ parameters {auto sk : SK q}
   typeComma s =
     case endType s of
       Tpe (RecordTpeFld p b ps f) t => putStackAs (RecordTpe p b $ ps:<(f,t)) VAR
+      Tpe (SumTpeFld p b ps f) t    => putStackAs (SumTpe p b $ ps:<(f,t)) VAR
       _                             => die
 
   export
@@ -237,6 +244,13 @@ parameters {auto sk : SK q}
       Tpe (RecordTpeFld p x sp f) t => typeAtom (PRec (BB x y) (sp<>>[(f,t)])) p
       _                             => die
 
+  export
+  closeSumType : BytePos -> STACK -> F1 q Lexer
+  closeSumType y s =
+    case endType s of
+      Tpe (SumTpeFld p x sp f) t => typeAtom (PSum (BB x y) (sp<>>[(f,t)])) p
+      _                          => die
+
   -----------
   -- Patterns
 
@@ -256,6 +270,7 @@ parameters {auto sk : SK q}
   var b (Top sx)           = putStackAs (TopFun (Top sx) b) TOP_SEP
   var b (Record x y sx)    = putStackAs (RecordFld x y sx b.val) EQ
   var b (RecordTpe x y sx) = putStackAs (RecordTpeFld x y sx b.val) COLON
+  var b (SumTpe x y sx)    = putStackAs (SumTpeFld x y sx b.val) COLON
   var b (Lam s x)          = putStackAs (LamPat s x $ cast b) COLON
   var b (Letrec s x)       = putStackAs (LetrecVar s x $ cast b) COLON
   var b (Let s x)          = putStackAs (LetPat s x $ cast b) EQ
