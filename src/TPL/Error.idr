@@ -10,7 +10,10 @@ import public Text.ByteBounds
 public export
 data TplErr : Type -> Type where
   ErrUnify          : (exp, found : t) -> TplErr t
+  ErrSum            : TplErr t
+  ErrExpSum         : t -> TplErr t
   ErrNotField       : VarName -> t -> TplErr t
+  ErrNotCon         : VarName -> t -> TplErr t
   ErrFun            : (found : t) -> TplErr t
   ErrUnexpFun       : (exp : t) -> TplErr t
   ErrArg            : (exp, found : t) -> TplErr t
@@ -71,9 +74,21 @@ parameters {0 trm    : Type}
   unsupported : trm -> Either (BBErr $ TplErr t) a
   unsupported t = Left $ B (Custom ErrUnsupported) (cast t)
 
+  export
+  errSum : trm -> Either (BBErr $ TplErr t) a
+  errSum t = Left $ B (Custom ErrSum) (cast t)
+
+  export
+  errExpSum : trm -> t -> Either (BBErr $ TplErr t) a
+  errExpSum t tp = Left $ B (Custom $ ErrExpSum tp) (cast t)
+
 export
 notField : ByteBounded VarName -> t -> Either (BBErr $ TplErr t) a
 notField (B v b) rec =  Left $ B (Custom $ ErrNotField v rec) b
+
+export
+notCon : ByteBounded VarName -> t -> Either (BBErr $ TplErr t) a
+notCon (B v b) rec =  Left $ B (Custom $ ErrNotCon v rec) b
 
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
 typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
@@ -82,6 +97,7 @@ export
 Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrUnify e f)    = typeMsg e f
   interpolate (ErrNotField v t) = "'\{v}' is not a record field of \{t}"
+  interpolate (ErrNotCon v t)   = "'\{v}' is not a constructor of \{t}"
   interpolate (ErrFun f)        = typeMsg "a function type" f
   interpolate (ErrUnexpFun e)   = typeMsg e "a function type"
   interpolate (ErrArg e f)      = typeMsg "\{e} -> _" "\{f} -> _"
@@ -91,4 +107,6 @@ Interpolation t => Interpolation (TplErr t) where
   interpolate (ErrDefined v)    = "Function already defined: '\{v}'"
   interpolate (ErrUnknown v)    = "Unknown name: '\{v}'"
   interpolate (ErrUndef v)      = "Missing function definition for '\{v}'"
-  interpolate ErrUnsupported  = "Feature not implemened yet"
+  interpolate ErrUnsupported    = "Feature not implemened yet"
+  interpolate ErrSum            = "Can't infer type of sum type"
+  interpolate (ErrExpSum t)     = "Expected sum type but got \{t}"

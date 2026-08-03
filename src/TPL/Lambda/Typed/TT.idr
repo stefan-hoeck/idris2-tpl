@@ -30,6 +30,12 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
     -> IsField v.val ps t
     -> STerm (TRec ps) sc
     -> STerm t sc
+  SSum :
+       ByteBounds
+    -> (v : ByteBounded VarName)
+    -> IsField v.val ps t
+    -> STerm t sc
+    -> STerm (TSum ps) sc
   SLam   :
        ByteBounds
     -> (v : BindName)
@@ -89,6 +95,7 @@ restore (SApp b t s)     = TApp b (restore t) (restore s)
 restore (SLam b x t y)   = TLam b x (cast t) (restore y)
 restore (SPrim b p)      = TPrim b p
 restore (SRec b r)       = restoreRec b [<] r
+restore (SSum b v _ t)   = TSum b v (restore t)
 restore (SIf b i x y)    = TIf b (restore i) (restore x) (restore y)
 restore (SFix b x)       = TApp b "fix" (restore x)
 restore (SSucc b x)      = TApp b "succ" (restore x)
@@ -111,6 +118,7 @@ shiftImpl sol son (SApp b t s)     = SApp b (shiftImpl sol son t) (shiftImpl sol
 shiftImpl sol son (SLam b x t y)   = SLam b x t (shiftImpl (suc sol) son y)
 shiftImpl sol son (SPrim b p)      = SPrim b p
 shiftImpl sol son (SRec b p)       = SRec b (shiftRec sol son p)
+shiftImpl sol son (SSum b v p t)   = SSum b v p (shiftImpl sol son t)
 shiftImpl sol son (SIf b i t e)    = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
 shiftImpl sol son (SFix b x)       = SFix b (shiftImpl sol son x)
 shiftImpl sol son (SSucc b x)      = SSucc b (shiftImpl sol son x)
@@ -132,6 +140,7 @@ strImpl s t (SApp b x y)     = [| SApp (pure b) (strImpl s t x) (strImpl s t y) 
 strImpl s t (SLam b x p y)   = SLam b x p <$> strImpl s (suc t) y
 strImpl s t (SPrim b p)      = Just $ SPrim b p
 strImpl s t (SRec b p)       = SRec b <$> strRec s t p
+strImpl s t (SSum b v p x)   = SSum b v p <$> strImpl s t x
 strImpl s t (SIf b i x y)    = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
 strImpl s t (SFix b x)       = SFix b <$> strImpl s t x
 strImpl s t (SSucc b x)      = SSucc b <$> strImpl s t x
@@ -156,6 +165,7 @@ embedImpl (SApp b t s)       = SApp b (embedImpl t) (embedImpl s)
 embedImpl (SLam b x p y)     = SLam b x p (embedImpl y)
 embedImpl (SPrim b p)        = SPrim b p
 embedImpl (SRec b p)         = SRec b (embedRec p)
+embedImpl (SSum b v p t)     = SSum b v p (embedImpl t)
 embedImpl (SIf b i x y)      = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
 embedImpl (SFix b x)         = SFix b $ embedImpl x
 embedImpl (SSucc b x)        = SSucc b $ embedImpl x
@@ -240,23 +250,28 @@ parameters (env : Env Entry)
       Just (s ** prf) => check m b (SField b v prf x2)
       Nothing         => notField v (TRec ps)
 
-  tc m (TLam b v rt scope) = Prelude.do
+  tc m (TLam b v rt sc) = Prelude.do
     tp <- resolveTpe rt
     case m of
       Just (TFun eat ert) => case hdecEq eat tp of
         Nothing0 => typeErr rt eat tp
         Just0 _  => Prelude.do
-            sscope <- tc (Just ert) scope
+            sscope <- tc (Just ert) sc
             Right (SLam b v eat sscope)
       Just t              => unexpFunErr b t
       Nothing             => Prelude.do
-        (res ** sscope) <- tc Nothing scope
+        (res ** sscope) <- tc Nothing sc
         Right (TFun tp res ** SLam b v tp sscope)
 
   tc m (TLet b v rt scope) = Prelude.do
-    (targ ** arg) <- tc Nothing rt
-    (tscp ** scp) <- tc Nothing scope
-    check m b (SApp b (SLam NoBB v targ scp) arg)
+    (targ ** arg) <- tc {sc} Nothing rt
+    case m of
+      Just t  => Prelude.do
+        scp <- tc (Just t) scope
+        pure (SApp b (SLam NoBB v targ scp) arg)
+      Nothing => Prelude.do
+        (tscp ** scp) <- tc Nothing scope
+        pure (tscp ** SApp b (SLam NoBB v targ scp) arg)
 
   tc m (TLetrec b v rt x scope)   = Prelude.do
     tp <- resolveTpe rt
@@ -286,7 +301,13 @@ parameters (env : Env Entry)
     (ps ** r) <- tcrec y
     check m b (SRec b r)
 
-  tc m (TSum b v t) = unsupported b
+  tc m (TSum b v t) =
+    case m of
+      Just (TSum ps) => case isField v.val ps of
+        Just (ft ** prf) => SSum b v prf <$> tc (Just ft) t
+        Nothing          => notCon v (TSum ps)
+      Just tp        => errExpSum b tp
+      _              => errSum b
 
   tc m (TIf b i y e)  = Prelude.do
     si <- tc {sc} (Just TBool) i
