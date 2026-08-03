@@ -51,7 +51,10 @@ process env (Defn bb nm trm) =
         (\v => (insert nm (Def t v) env, Nothing))
         (typecheckAs {sc = [<]} env t (desugar trm))
     Just _   => defined bb nm
-    Nothing  => unknown bb nm
+    Nothing  =>
+      map
+        (\(t ** v) => (insert nm (Def t v) env, Nothing))
+        (typecheck {sc = [<]} env (desugar trm))
 process env (Eval x)   =
   map
     (\(t ** v) => (env, Just "Type: \{t}, Value: \{eval [<] v}"))
