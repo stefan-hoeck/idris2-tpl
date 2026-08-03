@@ -31,7 +31,7 @@ data STACK : Type where
   Alias               : STACK -> ByteBounded VarName -> STACK
 
   App                 : STACK -> PTerm -> SnocList PTerm -> STACK
-  As                  : STACK -> PTerm -> SnocList PTerm -> STACK
+  As                  : STACK -> PTerm -> STACK
   Term                : STACK -> PTerm -> STACK
 
   Lam                 : STACK -> BytePos -> STACK
@@ -107,16 +107,15 @@ endType : STACK -> STACK
 endType (TpeSeq p ss s) = Tpe p (tpeAppAll ss s)
 endType _               = Err
 
-setAs : STACK -> PTerm -> SnocList PTerm -> RawTpe -> STACK
-setAs p x [<]     rt = App p (PAs (cast x <+> cast rt) x rt) [<]
-setAs p x (sy:<y) rt = App p x $ sy:<PAs (cast y <+> cast rt) x rt
+setAs : STACK -> PTerm -> RawTpe -> STACK
+setAs p x rt = App p (PAs (cast x <+> cast rt) x rt) [<]
 
 export
 endAs : STACK -> STACK
 endAs s =
   case endType s of
-    Tpe (As p x sx) tp => setAs p x sx tp
-    _                  => Err
+    Tpe (As p x) tp => setAs p x tp
+    _               => Err
 
 --------------------------------------------------------------------------------
 -- State Transitions
@@ -215,8 +214,8 @@ parameters {auto sk : SK q}
 
   export
   as : STACK -> F1 q Lexer
-  as (App p x sx) = putStackAs (As p x sx) TYPE
-  as _            = die
+  as (App p x [<]) = putStackAs (As p x) TYPE
+  as _             = die
 
   --------
   -- Types
@@ -239,7 +238,7 @@ parameters {auto sk : SK q}
     case endType s of
       Tpe (TopFun p b) t => pushDecl (Decl b.bounds b.val t) p
       Tpe (Alias p b)  t => pushDecl (Alias b.bounds b.val t) p
-      Tpe (As p x sx)  t => termSemicolon (setAs p x sx t)
+      Tpe (As p x)     t => termSemicolon (setAs p x t)
       _                  => die
 
   export
@@ -248,7 +247,7 @@ parameters {auto sk : SK q}
     case endType s of
       Tpe (RecordTpeFld p b ps f) t => putStackAs (RecordTpe p b $ ps:<(f,t)) VAR
       Tpe (SumTpeFld p b ps f) t    => putStackAs (SumTpe p b $ ps:<(f,t)) VAR
-      Tpe (As p x sx) t             => recordComma (setAs p x sx t)
+      Tpe (As p x) t                => recordComma (setAs p x t)
       _                             => die
 
   export
@@ -256,7 +255,7 @@ parameters {auto sk : SK q}
   closeType s =
     case endType s of
       Tpe (OpnTpe p _) t => typeAtom t p
-      Tpe (As p x sx) t  => closeTerm (setAs p x sx t)
+      Tpe (As p x) t     => closeTerm (setAs p x t)
       _                  => die
 
   export
@@ -271,7 +270,7 @@ parameters {auto sk : SK q}
   closeRecordType y s =
     case endType s of
       Tpe (RecordTpeFld p x sp f) t => typeAtom (PRec (BB x y) (sp<>>[(f,t)])) p
-      Tpe (As p x sx) t             => closeRecord y (setAs p x sx t)
+      Tpe (As p x) t                => closeRecord y (setAs p x t)
       _                             => die
 
   export
@@ -279,7 +278,7 @@ parameters {auto sk : SK q}
   closeSumType y s =
     case endType s of
       Tpe (SumTpeFld p x sp f) t => typeAtom (PSum (BB x y) (sp<>>[(f,t)])) p
-      Tpe (As p x sx) t          => closeSum y (setAs p x sx t)
+      Tpe (As p x) t             => closeSum y (setAs p x t)
       _                          => die
 
   -----------
