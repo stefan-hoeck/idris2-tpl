@@ -123,6 +123,10 @@ example =
   %alias BoolNat : {bool: Bool, nat: Nat};
   %alias Complex : {fst: Nat, snd: BoolNat};
 
+  %alias MaybeNat : <none: Unit, some: Nat>;
+  safePred : Nat -> MaybeNat;
+  safePred = λn : Nat . if iszero n then <none = unit> else <some = pred n>;
+
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
   %eval c2 succ 4;
@@ -139,6 +143,7 @@ example =
           }
       };
   %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
+  %eval safePred 10;
   """
 
 unclosedTypeParen : String

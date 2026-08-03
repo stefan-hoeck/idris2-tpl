@@ -100,10 +100,12 @@ desugar : PTerm -> Term
 desugar (PVar b v)           = TVar b v
 desugar (PAs b t tp)         = TAs b (desugar t) tp
 desugar (PField b y v)       = TField b (desugar y) v
+desugar (PLam b (PV x) t sc) = TLam b x t (desugar sc)
 desugar (PLam b p t sc)      =
  let v      := machineName 0
      (_,ps) := unpat 1 p (TVar NoBB v)
   in TLam b (NM v) t (unpatLet NoBB ps (desugar sc))
+desugar (PLet b (PV x) y sc) = TLet b x (desugar y) (desugar sc)
 desugar (PLet b p y sc)      =
  let (_,ps) := unpat 0 p (desugar y)
   in unpatLet b ps (desugar sc)

@@ -37,6 +37,7 @@ data Value : (t : Tpe) -> Type where
   VBool : (v : Bool) -> Value TBool
   VUnit : Value TUnit
   VRec  : (r : VRecord ps) -> Value (TRec ps)
+  VSum  : (v : VarName) -> IsField v ps t -> Value t -> Value (TSum ps)
   VLam  :
        {0 sc : Scope TTVar}
     -> (v   : BindName)
@@ -62,6 +63,7 @@ toTerm (VNat v)       = TPrim NoBB (PNat v)
 toTerm (VBool v)      = TPrim NoBB (PBool v)
 toTerm VUnit          = TPrim NoBB PUnit
 toTerm (VRec r)       = TRec NoBB (torec r)
+toTerm (VSum f p v)   = TSum NoBB (B f NoBB) (toTerm v)
 toTerm (VLam v t _ x) = TLam NoBB v (cast t) (restore x)
 
 torec []          = []
@@ -97,6 +99,7 @@ eval e (SApp b y z) =
   case eval e y of
     VLam v t1 e2 scope => eval (e2 :< Strict (eval e z)) scope
 eval e (SRec b y) = VRec (rec e y)
+eval e (SSum b v p t) = VSum v.val p (eval e t)
 eval e (SIf b pred fst snd) =
   case eval e pred of
     VBool True  => eval e fst
