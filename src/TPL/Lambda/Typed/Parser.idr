@@ -20,6 +20,8 @@ vars =
   :: step "letrec" (failUnexpected [] ERR)
   :: step "in" (failUnexpected [] ERR)
   :: step "as" (failUnexpected [] ERR)
+  :: step "case" (failUnexpected [] ERR)
+  :: step "of" (failUnexpected [] ERR)
   :: varName (withStack . var)
 
 atoms : Steps q Lexers SK
@@ -48,6 +50,7 @@ ptrans =
         :: step "if" (posModStack SK If TERM)
         :: step "let" (posModStack SK Let PATTERN)
         :: step "letrec" (posModStack SK Letrec BINDNAME)
+        :: step "case" (posModStack SK Case TERM)
         :: atoms
     , E ATOM $ spaced atoms
     , E ATOM_OR_CLOSE $ spaced $
@@ -56,10 +59,12 @@ ptrans =
         :: step '}' (posWithStack closeRecord)
         :: step '>' (posWithStack closeSum)
         :: step ',' (withStack recordComma)
+        :: step '|' (withStack endCase)
         :: step "else" (withStack else')
         :: step "then" (withStack then')
         :: step "in" (withStack in')
         :: step "as" (withStack as)
+        :: step "of" (withStack of')
         :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
         :: atoms
     , E EQ $ spaced [step' '=' TERM]
@@ -70,6 +75,10 @@ ptrans =
     , E PAT_NEW $ spaced $ step '}' (withStack closePattern) :: vars
     , E PAT_EQ $ spaced [step' '=' PATTERN]
     , E PAT_END $ spaced [step' ',' VAR, step '}' (withStack closePattern)]
+
+    , E ANGLE_OPEN $ spaced [step' '<' VAR]
+    , E ANGLE_CLOSE $ spaced [step' '>' DBL_ARROW]
+    , E DBL_ARROW $ spaced [step' "=>" ATOM]
 
     , E TYPE $ spaced $
           step "(" (posModStack SK OpnTpe TYPE)
@@ -88,9 +97,11 @@ ptrans =
         , step ';' (withStack typeSemicolon)
         , step '=' (withStack typeEq)
         , step ',' (withStack typeComma)
+        , step '|' (withStack $ endCase . endAs)
         , step "else" (withStack $ else' . endAs)
         , step "then" (withStack $ then' . endAs)
         , step "in" (withStack $ in' . endAs)
+        , step "of" (withStack $ of' . endAs)
         ]
     ]
 

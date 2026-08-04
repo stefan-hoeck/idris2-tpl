@@ -28,6 +28,8 @@ notKeyword "let"    = "let_"
 notKeyword "letrec" = "letrec_"
 notKeyword "in"     = "in_"
 notKeyword "as"     = "as_"
+notKeyword "case"   = "case_"
+notKeyword "of"     = "of_"
 notKeyword s        = VN s
 
 export
@@ -109,6 +111,9 @@ term = go 5
     sum : Nat -> Gen PTerm
     sum k = [| PSum bb (bounded varname) (go k) |]
 
+    caseTriple : Nat -> Gen (ByteBounded VarName, Pattern, PTerm)
+    caseTriple k = (\x,y,z => (x,y,z)) <$> bounded varname <*> pattern <*> go k
+
     go 0     = prim
     go (S k) =
       frequency
@@ -122,6 +127,7 @@ term = go 5
         , (2, rec k)
         , (2, sum k)
         , (2, [| PAs bb (go k) tpe |])
+        , (2, [| PCase bb (go k) (list (linear 1 5) (caseTriple k)) |])
         ]
 
 export

@@ -11,6 +11,7 @@ import public TPL.Lambda.Typed.Declaration
 %runElab deriveParserState "Lexers" "Lexer"
   [ "TOP", "TOP_SEP", "TERM", "ATOM", "ATOM_OR_CLOSE", "DOT", "EQ"
   , "VAR", "BINDNAME", "PATTERN", "PAT_NEW", "PAT_EQ", "PAT_END"
+  , "ANGLE_OPEN", "ANGLE_CLOSE", "DBL_ARROW"
   , "TYPE", "ARROW", "ALIAS_NAME", "COLON"
   , "ERR"
   ]
@@ -22,6 +23,10 @@ RecField = (VarName,PTerm)
 public export
 0 RecTypeField : Type
 RecTypeField = (VarName,RawTpe)
+
+public export
+0 CaseTriples : Type
+CaseTriples = SnocList (ByteBounded VarName, Pattern, PTerm)
 
 public export
 data STACK : Type where
@@ -62,6 +67,11 @@ data STACK : Type where
   OpnTrm              : STACK -> BytePos -> STACK
   Seq                 : STACK -> BytePos -> PTerm -> STACK
 
+  Case                : STACK -> BytePos -> STACK
+  CaseOf              : STACK -> BytePos -> PTerm -> CaseTriples -> STACK
+  CaseFld             : STACK -> BytePos -> PTerm -> CaseTriples -> ByteBounded VarName -> STACK
+  CasePat             : STACK -> BytePos -> PTerm -> CaseTriples -> ByteBounded VarName -> Pattern -> STACK
+
   Tpe                 : STACK -> RawTpe -> STACK
   TpeSeq              : STACK -> SnocList RawTpe -> RawTpe -> STACK
   OpnTpe              : STACK -> BytePos -> STACK
@@ -93,11 +103,12 @@ public export
 SK = Stack TpeErr STACK Lexers
 
 endTerm : PTerm -> STACK -> STACK
-endTerm t (LamTpe s b p tp)     = endTerm (PLam (fromPos b t) p tp t) s
-endTerm t (LetTrm s b p x)      = endTerm (PLet (fromPos b t) p x t) s
-endTerm t (LetrecTrm s b p x y) = endTerm (PLetrec (fromPos b t) p x y t) s
-endTerm t (Else s b x y)        = endTerm (PIf (fromPos b t) x y t) s
-endTerm t s                     = Term s t
+endTerm t (LamTpe s b p tp)      = endTerm (PLam (fromPos b t) p tp t) s
+endTerm t (LetTrm s b p x)       = endTerm (PLet (fromPos b t) p x t) s
+endTerm t (LetrecTrm s b p x y)  = endTerm (PLetrec (fromPos b t) p x y t) s
+endTerm t (Else s b x y)         = endTerm (PIf (fromPos b t) x y t) s
+endTerm t (CasePat s b x st v p) = endTerm (PCase (fromPos b t) x $ st <>> [(v,p,t)]) s
+endTerm t s                      = Term s t
 
 endApp : STACK -> STACK
 endApp (App s t st) = endTerm (appSnoc t st) s
@@ -176,6 +187,12 @@ parameters {auto sk : SK q}
       _                     => die
 
   export
+  endCase : STACK -> F1 q Lexer
+  endCase (App (CasePat p b t st v pt) x sx) =
+    putStackAs (CaseOf p b t $ st:<(v,pt,appSnoc x sx)) ANGLE_OPEN
+  endCase _ = die
+
+  export
   recordComma : STACK -> F1 q Lexer
   recordComma s =
     case endApp s of
@@ -216,6 +233,13 @@ parameters {auto sk : SK q}
   as : STACK -> F1 q Lexer
   as (App p x [<]) = putStackAs (As p x) TYPE
   as _             = die
+
+  export
+  of' : STACK -> F1 q Lexer
+  of' s =
+    case endApp s of
+      Term (Case p b) t => putStackAs (CaseOf p b t [<]) ANGLE_OPEN
+      _                 => die
 
   --------
   -- Types
@@ -285,10 +309,11 @@ parameters {auto sk : SK q}
   -- Patterns
 
   pattern : Pattern -> STACK -> F1 q Lexer
-  pattern p (Lam s x)         = putStackAs (LamPat s x p) COLON
-  pattern p (Let s x)         = putStackAs (LetPat s x p) EQ
-  pattern p (PatFld s x sp f) = putStackAs (Pat s x $ sp:<(f, p)) PAT_END
-  pattern _ _                 = die
+  pattern p (Lam s x)            = putStackAs (LamPat s x p) COLON
+  pattern p (Let s x)            = putStackAs (LetPat s x p) EQ
+  pattern p (PatFld s x sp f)    = putStackAs (Pat s x $ sp:<(f, p)) PAT_END
+  pattern p (CaseFld s b x st f) = putStackAs (CasePat s b x st f p) ANGLE_CLOSE
+  pattern _ _                    = die
 
   export
   placeholder : STACK -> F1 q Lexer
@@ -297,17 +322,19 @@ parameters {auto sk : SK q}
 
   export
   var : ByteBounded VarName -> STACK -> F1 q Lexer
-  var b (Top sx)           = putStackAs (TopFun (Top sx) b) TOP_SEP
-  var b (Record x y sx)    = putStackAs (RecordFld x y sx b.val) EQ
-  var b (RecordTpe x y sx) = putStackAs (RecordTpeFld x y sx b.val) COLON
-  var b (Sum x y)          = putStackAs (SumFld x y b) EQ
-  var b (SumTpe x y sx)    = putStackAs (SumTpeFld x y sx b.val) COLON
-  var b (Lam s x)          = putStackAs (LamPat s x $ cast b) COLON
-  var b (Letrec s x)       = putStackAs (LetrecVar s x $ cast b) COLON
-  var b (Let s x)          = putStackAs (LetPat s x $ cast b) EQ
-  var b (Pat s p sp)       = putStackAs (PatFld s p sp b) PAT_EQ
-  var b (PatFld s p sp f)  = putStackAs (Pat s p $ sp:<(f, cast b)) PAT_END
-  var b s                  = onAtom (PVar b.bounds b.val) s
+  var b (Top sx)             = putStackAs (TopFun (Top sx) b) TOP_SEP
+  var b (Record x y sx)      = putStackAs (RecordFld x y sx b.val) EQ
+  var b (RecordTpe x y sx)   = putStackAs (RecordTpeFld x y sx b.val) COLON
+  var b (Sum x y)            = putStackAs (SumFld x y b) EQ
+  var b (SumTpe x y sx)      = putStackAs (SumTpeFld x y sx b.val) COLON
+  var b (Lam s x)            = putStackAs (LamPat s x $ cast b) COLON
+  var b (Letrec s x)         = putStackAs (LetrecVar s x $ cast b) COLON
+  var b (Let s x)            = putStackAs (LetPat s x $ cast b) EQ
+  var b (Pat s p sp)         = putStackAs (PatFld s p sp b) PAT_EQ
+  var b (PatFld s p sp f)    = putStackAs (Pat s p $ sp:<(f, cast b)) PAT_END
+  var b (CaseOf s p x st)    = putStackAs (CaseFld s p x st b) PAT_EQ
+  var b (CaseFld s p x st f) = putStackAs (CasePat s p x st f $ cast b) ANGLE_CLOSE
+  var b s                    = onAtom (PVar b.bounds b.val) s
 
   export
   closePattern : STACK -> F1 q Lexer
