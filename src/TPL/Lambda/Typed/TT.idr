@@ -321,6 +321,8 @@ parameters (env : Env Entry)
         se        <- tc (Just t) e
         Right (t ** SIf b si sy se)
 
+  tc m (TCase b _ _) = unsupported b
+
   export %inline
   typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
   typecheck = tc Nothing
