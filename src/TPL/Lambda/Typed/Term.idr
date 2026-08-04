@@ -49,6 +49,9 @@ data Term : Type where
   ||| desugared into a pattern match on bools.
   TIf    : ByteBounds -> (i,t,e : Term) -> Term
 
+  ||| `case ... of` expressions.
+  TCase  : ByteBounds -> Term -> List (ByteBounded VarName, BindName, Term) -> Term
+
 %runElab derive "Term" [Show,Eq]
 
 export
@@ -68,6 +71,7 @@ Cast Term ByteBounds where
   cast (TRec b _)          = b
   cast (TSum b _ _)        = b
   cast (TIf b _ _ _)       = b
+  cast (TCase b _ _)       = b
 
 unpats :
      SnocList (BindName,Term)
@@ -95,6 +99,10 @@ unpatLet bb ((bn,t) :: ps) x = TLet bb bn t (unpatLet NoBB ps x)
 
 desugarRec : List (VarName,PTerm) -> List (VarName,Term)
 
+desugarCase :
+     List (ByteBounded VarName,Pattern,PTerm)
+  -> List (ByteBounded VarName,BindName,Term)
+
 export
 desugar : PTerm -> Term
 desugar (PVar b v)           = TVar b v
@@ -115,11 +123,23 @@ desugar (PPrim b y)          = TPrim b y
 desugar (PRec b xs)          = TRec b (desugarRec xs)
 desugar (PSum b v t)         = TSum b v (desugar t)
 desugar (PIf b i t e)        = TIf b (desugar i) (desugar t) (desugar e)
+desugar (PCase b t ts)       = TCase b (desugar t) (desugarCase ts)
 
 desugarRec [] = []
 desugarRec ((v,t)::ps) = (v,desugar t) :: desugarRec ps
 
+desugarCase [] = []
+desugarCase ((v,PV b,t)::ts) = (v,b,desugar t) :: desugarCase ts
+desugarCase ((v,p,t)::ts)    =
+ let n      := machineName 0
+     (_,ps) := unpat 1 p (TVar NoBB n)
+  in (v,cast n,unpatLet NoBB ps (desugar t)) :: desugarCase ts
+
 resugarRec : List (VarName,Term) -> List (VarName,PTerm)
+
+resugarCase :
+     List (ByteBounded VarName, BindName, Term)
+  -> List (ByteBounded VarName, Pattern, PTerm)
 
 export
 resugar : Term -> PTerm
@@ -134,6 +154,10 @@ resugar (TPrim b y)          = PPrim b y
 resugar (TRec b xs)          = PRec b (resugarRec xs)
 resugar (TSum b v t)         = PSum b v (resugar t)
 resugar (TIf b i t e)        = PIf b (resugar i) (resugar t) (resugar e)
+resugar (TCase b t ts)       = PCase b (resugar t) (resugarCase ts)
 
 resugarRec [] = []
 resugarRec ((v,t)::ps) = (v,resugar t) :: resugarRec ps
+
+resugarCase [] = []
+resugarCase ((v,b,t)::ts) = (v,cast b, resugar t) :: resugarCase ts

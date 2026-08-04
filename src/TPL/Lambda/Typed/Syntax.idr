@@ -118,6 +118,12 @@ data PTerm : Type where
   ||| desugared into a pattern match on bools.
   PIf      : ByteBounds -> (i,t,e : PTerm) -> PTerm
 
+  PCase    :
+       ByteBounds
+    -> PTerm
+    -> List (ByteBounded VarName, Pattern, PTerm)
+    -> PTerm
+
 %runElab derive "PTerm" [Show,Eq]
 
 public export %inline
@@ -140,6 +146,7 @@ Cast PTerm ByteBounds where
   cast (PRec b _)          = b
   cast (PSum b _ _)        = b
   cast (PIf b _ _ _)       = b
+  cast (PCase b _ _)       = b
 
 export
 MapBounds PTerm where
@@ -155,6 +162,9 @@ MapBounds PTerm where
   mapBounds f (PSum b x y)          = PSum (f b) (mapBounds f x) (mapBounds f y)
   mapBounds f (PIf b i t e)         =
     PIf (f b) (mapBounds f i) (mapBounds f t) (mapBounds f e)
+  mapBounds f (PCase b t cs)        =
+    PCase (f b) (mapBounds f t) $ assert_total $
+      (\(v,p,x) => (mapBounds f v, mapBounds f p, mapBounds f x)) <$> cs
 
 export
 nat : ByteBounds -> Nat -> PTerm
@@ -205,11 +215,19 @@ isAtom (PRec {})   = True
 isAtom (PSum {})   = True
 isAtom _           = False
 
+isApp : PTerm -> Bool
+isApp (PApp {}) = True
+isApp x         = isAtom x
+
 appL : PTerm -> String
 
 paren : PTerm -> String
 
+caseRHS : PTerm -> String
+
 prettyFields : SnocList String -> List (VarName,PTerm) -> String
+
+cases : SnocList String -> List (ByteBounded VarName, Pattern, PTerm) -> String
 
 pretty : PTerm -> String
 pretty (PVar _ v)           = v.name
@@ -223,14 +241,21 @@ pretty (PPrim _ p)          = interpolate p
 pretty (PRec _ p)           = "{\{prettyFields [<] p}}"
 pretty (PSum _ v t)         = "<\{v.val}=\{pretty t}>"
 pretty (PIf _ i t e)        = "if \{pretty i} then \{pretty t} else \{pretty e}"
+pretty (PCase _ t cs)       = "case \{pretty t} of \{cases [<] cs}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"
+
+caseRHS t = if isApp t then pretty t else "(\{pretty t})"
 
 prettyFields ss []          = fastConcat $ intersperse "," (ss <>> [])
 prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}=\{pretty t}") ps
 
 appL (PApp _ t s) = "\{appL t} \{paren s}"
 appL t            = paren t
+
+cases ss [] = fastConcat $ intersperse "\n |" (ss <>> [])
+cases ss ((v,p,x)::ts) =
+  cases (ss :< "  <\{v.val}=\{p}> => \{caseRHS x}") ts
 
 export %inline
 Interpolation PTerm where interpolate = pretty
