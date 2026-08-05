@@ -1,5 +1,6 @@
 module TPL.Lambda.Typed.TT
 
+import Data.List.Quantifiers
 import public TPL.Env
 import public TPL.Lambda.Typed.Term
 
@@ -18,8 +19,16 @@ PrimTpe (PNat _)  = TNat
 PrimTpe (PBool _) = TBool
 PrimTpe PUnit     = TUnit
 
-public export
-data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type
+namespace SRecord
+  public export
+  data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type
+
+namespace SClause
+  public export
+  record SClause (p : (VarName,Tpe)) (t : Tpe) (sc : Scope TTVar)
+
+  public export
+  data SClauses : List (VarName, Tpe) -> (t : Tpe) -> (sc : Scope TTVar) -> Type
 
 public export
 data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
@@ -51,10 +60,39 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
     -> (fst  : STerm t sc)
     -> (snd  : STerm t sc)
     -> STerm t sc
+  SCase  :
+       ByteBounds
+    -> STerm (TSum ps) sc
+    -> SClauses ps t sc
+    -> STerm t sc
   SFix   : ByteBounds -> STerm (TFun t t) sc -> STerm t sc
   SSucc  : ByteBounds -> STerm TNat sc -> STerm TNat sc
   SPred  : ByteBounds -> STerm TNat sc -> STerm TNat sc
   SIsZ   : ByteBounds -> STerm TNat sc -> STerm TBool sc
+
+namespace SRecord
+  data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type where
+    Nil  : SRecord [] sc
+    (::) : (p : (VarName,STerm t sc)) -> SRecord ps sc -> SRecord ((fst p, t) :: ps) sc
+
+namespace SClause
+  record SClause (p : (VarName, Tpe)) (t : Tpe) (sc : Scope TTVar) where
+    constructor SC
+    name  : BindName
+    term  : STerm t (sc:<V name (snd p))
+
+  data SClauses : List (VarName, Tpe) -> (t : Tpe) -> (sc : Scope TTVar) -> Type where
+    Nil  : SClauses [] t sc
+    (::) :
+         {p : (VarName,Tpe)}
+      -> SClause p t sc
+      -> SClauses ps t sc
+      -> SClauses (p::ps) t sc
+
+  export
+  getClause : IsField v ps t -> SClauses ps tp sc -> (n ** STerm tp (sc:<V n t))
+  getClause IFZ     ((::) {p = (v,t)} (SC n x) _) = (n ** x)
+  getClause (IFS x) (_::cs) = getClause x cs
 
 fix :
      ByteBounds
@@ -64,10 +102,6 @@ fix :
   -> (y : STerm s (sc:<V v t))
   -> STerm s sc
 fix b t v x y = SApp b (SLam NoBB v t y) (SFix NoBB (SLam NoBB v t x))
-
-data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type where
-  Nil  : SRecord [] sc
-  (::) : (p : (VarName,STerm t sc)) -> SRecord ps sc -> SRecord ((fst p, t) :: ps) sc
 
 export
 getField : IsField v ps t -> SRecord ps sc -> STerm t sc
@@ -87,6 +121,11 @@ restoreRec :
   -> SRecord ps sc
   -> Term
 
+restoreCases :
+     SnocList (ByteBounded VarName,BindName,Term)
+  -> SClauses ps t sc
+  -> List (ByteBounded VarName,BindName,Term)
+
 export
 restore : STerm t sc -> Term
 restore (SVar {n} b _)   = TVar b n
@@ -97,6 +136,7 @@ restore (SPrim b p)      = TPrim b p
 restore (SRec b r)       = restoreRec b [<] r
 restore (SSum b v _ t)   = TSum b v (restore t)
 restore (SIf b i x y)    = TIf b (restore i) (restore x) (restore y)
+restore (SCase b x cs)   = TCase b (restore x) (restoreCases [<] cs)
 restore (SFix b x)       = TApp b "fix" (restore x)
 restore (SSucc b x)      = TApp b "succ" (restore x)
 restore (SPred b x)      = TApp b "pred" (restore x)
@@ -105,33 +145,46 @@ restore (SIsZ b x)       = TApp b "iszero" (restore x)
 restoreRec b sp [] = TRec b (sp <>> [])
 restoreRec b sp ((v,t)::ps) = restoreRec b (sp:<(v,restore t)) ps
 
+restoreCases sc [] = sc <>> []
+restoreCases sc ((::) {p} (SC n t) ts) =
+  restoreCases (sc:<(pure (fst p),n,restore t)) ts
+
 --------------------------------------------------------------------------------
 -- Handling Scope
 --------------------------------------------------------------------------------
 
 shiftRec : GenShift (SRecord ps)
 
+shiftClauses : GenShift (SClauses ps t)
+
 shiftImpl : GenShift (STerm t)
-shiftImpl sol son (SVar b x)       = SVar b (genShift sol son x)
-shiftImpl sol son (SField b v p x) = SField b v p (shiftImpl sol son x)
-shiftImpl sol son (SApp b t s)     = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
-shiftImpl sol son (SLam b x t y)   = SLam b x t (shiftImpl (suc sol) son y)
-shiftImpl sol son (SPrim b p)      = SPrim b p
-shiftImpl sol son (SRec b p)       = SRec b (shiftRec sol son p)
-shiftImpl sol son (SSum b v p t)   = SSum b v p (shiftImpl sol son t)
-shiftImpl sol son (SIf b i t e)    = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
-shiftImpl sol son (SFix b x)       = SFix b (shiftImpl sol son x)
-shiftImpl sol son (SSucc b x)      = SSucc b (shiftImpl sol son x)
-shiftImpl sol son (SPred b x)      = SPred b (shiftImpl sol son x)
-shiftImpl sol son (SIsZ b x)       = SIsZ b (shiftImpl sol son x)
+shiftImpl sol son (SVar b x)         = SVar b (genShift sol son x)
+shiftImpl sol son (SField b v p x)   = SField b v p (shiftImpl sol son x)
+shiftImpl sol son (SApp b t s)       = SApp b (shiftImpl sol son t) (shiftImpl sol son s)
+shiftImpl sol son (SLam b x t y)     = SLam b x t (shiftImpl (suc sol) son y)
+shiftImpl sol son (SPrim b p)        = SPrim b p
+shiftImpl sol son (SRec b p)         = SRec b (shiftRec sol son p)
+shiftImpl sol son (SSum b v p t)     = SSum b v p (shiftImpl sol son t)
+shiftImpl sol son (SIf b i t e)      = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
+shiftImpl sol son (SCase b t cs)     = SCase b (shiftImpl sol son t) (shiftClauses sol son cs)
+shiftImpl sol son (SFix b x)         = SFix b (shiftImpl sol son x)
+shiftImpl sol son (SSucc b x)        = SSucc b (shiftImpl sol son x)
+shiftImpl sol son (SPred b x)        = SPred b (shiftImpl sol son x)
+shiftImpl sol son (SIsZ b x)         = SIsZ b (shiftImpl sol son x)
 
 shiftRec sol son []          = []
 shiftRec sol son ((v,t)::ps) = (v,shiftImpl sol son t) :: shiftRec sol son ps
+
+shiftClauses sol son [] = []
+shiftClauses sol son (SC t trm :: cs) =
+  SC t (shiftImpl (suc sol) son trm) :: shiftClauses sol son cs
 
 export %inline
 Shiftable TTVar (STerm t) where genShift = shiftImpl
 
 strRec : GenStrengthen (SRecord ps)
+
+strClauses : GenStrengthen (SClauses ps t)
 
 strImpl : GenStrengthen (STerm t)
 strImpl s t (SVar b x)       = SVar b <$> genStrengthen s t x
@@ -142,6 +195,7 @@ strImpl s t (SPrim b p)      = Just $ SPrim b p
 strImpl s t (SRec b p)       = SRec b <$> strRec s t p
 strImpl s t (SSum b v p x)   = SSum b v p <$> strImpl s t x
 strImpl s t (SIf b i x y)    = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
+strImpl s t (SCase b i cs)   = [| SCase (pure b) (strImpl s t i) (strClauses s t cs) |]
 strImpl s t (SFix b x)       = SFix b <$> strImpl s t x
 strImpl s t (SSucc b x)      = SSucc b <$> strImpl s t x
 strImpl s t (SPred b x)      = SPred b <$> strImpl s t x
@@ -153,10 +207,18 @@ strRec s t ((v,r)::ps) =
       Just sps := strRec s t ps | _ => Nothing
    in Just $ (v,sr)::sps
 
+strClauses s t [] = Just []
+strClauses s t (SC tp x :: cs) =
+  let Just sx  := strImpl s (suc t) x | _ => Nothing
+      Just scs := strClauses s t cs   | _ => Nothing
+   in Just $ SC tp sx :: scs
+
 export %inline
 Strengthenable TTVar (STerm t) where genStrengthen = strImpl
 
 embedRec : Embed (SRecord ps)
+
+embedClauses : Embed (SClauses ps t)
 
 embedImpl : Embed (STerm t)
 embedImpl (SVar b x)         = SVar b (embed x)
@@ -167,6 +229,7 @@ embedImpl (SPrim b p)        = SPrim b p
 embedImpl (SRec b p)         = SRec b (embedRec p)
 embedImpl (SSum b v p t)     = SSum b v p (embedImpl t)
 embedImpl (SIf b i x y)      = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
+embedImpl (SCase b x cs)     = SCase b (embedImpl x) (embedClauses cs)
 embedImpl (SFix b x)         = SFix b $ embedImpl x
 embedImpl (SSucc b x)        = SSucc b $ embedImpl x
 embedImpl (SPred b x)        = SPred b $ embedImpl x
@@ -174,6 +237,9 @@ embedImpl (SIsZ b x)         = SIsZ b $ embedImpl x
 
 embedRec [] = []
 embedRec ((v,t)::ps) = (v,embedImpl t) :: embedRec ps
+
+embedClauses [] = []
+embedClauses (SC tp x::cs) = SC tp (embedImpl x) :: embedClauses cs
 
 export %inline
 Embeddable TTVar (STerm t) where embed = embedImpl
@@ -231,6 +297,41 @@ parameters (env : Env Entry)
     (ht ** h) <- tc Nothing t
     (tt ** pt) <- tcrec ps
     Right (_ ** ((v,h)::pt))
+
+  tcclausesAs :
+       {sc : _}
+    -> (bb  : ByteBounds)
+    -> (sum : Tpe)
+    -> (res : Tpe)
+    -> (ps  : List (VarName,Tpe))
+    -> (cs  : List (ByteBounded VarName,BindName,Term))
+    -> Either LamErr (SClauses ps res sc)
+  tcclausesAs bb sum res []            []              = Right []
+  tcclausesAs bb sum res []            (x :: xs)       = notCon (fst x) sum
+  tcclausesAs bb sum res (x :: xs)     []              = errCovering bb (fst <$> x::xs)
+  tcclausesAs bb sum res ((v,t) :: xs) ((w,n,x) :: ys) =
+    case v == w.val of
+      False => notCon w sum
+      True  => Prelude.do
+        sx  <- tc {sc = sc :< V n t} (Just res) x
+        sys <- tcclausesAs bb sum res xs ys
+        pure (SC n sx::sys)
+
+  tcclauses :
+       {sc : _}
+    -> (bb  : ByteBounds)
+    -> (sum : Tpe)
+    -> (ps  : List (VarName,Tpe))
+    -> (cs  : List (ByteBounded VarName,BindName,Term))
+    -> Either LamErr (res ** SClauses ps res sc)
+  tcclauses bb sum ((v,t) :: xs) ((w,n,x) :: ys) =
+    case v == w.val of
+      False => notCon w sum
+      True  => Prelude.do
+        (res ** sx) <- tc {sc = sc :< V n t} Nothing x
+        sys <- tcclausesAs bb sum res xs ys
+        pure (res ** (SC n sx::sys))
+  tcclauses bb sum xs ys = (\x => (_ ** x)) <$> tcclausesAs bb sum TUnit xs ys
 
   tc m (TVar b v)     =
     case findNVar ((NM v ==) . name) sc of
@@ -321,7 +422,11 @@ parameters (env : Env Entry)
         se        <- tc (Just t) e
         Right (t ** SIf b si sy se)
 
-  tc m (TCase b _ _) = unsupported b
+  tc m (TCase b x cs) = Prelude.do
+    (TSum ps ** x2) <- tc {sc} Nothing x | (tp ** _) => errExpSum x tp
+    case m of
+      Just t  => SCase b x2 <$> tcclausesAs b (TSum ps) t ps cs
+      Nothing => (\(t ** scs) => (t ** SCase b x2 scs)) <$> tcclauses b (TSum ps) ps cs
 
   export %inline
   typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)

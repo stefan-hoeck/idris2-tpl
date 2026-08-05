@@ -24,6 +24,7 @@ data TplErr : Type -> Type where
   ErrUndef          : (n : VarName) -> TplErr t
   ErrUnknown        : (n : VarName) -> TplErr t
   ErrUnsupported    : TplErr t
+  ErrCovering       : List VarName -> TplErr t
 
 %runElab derive "TplErr" [Show,Eq]
 
@@ -82,6 +83,10 @@ parameters {0 trm    : Type}
   errExpSum : trm -> t -> Either (BBErr $ TplErr t) a
   errExpSum t tp = Left $ B (Custom $ ErrExpSum tp) (cast t)
 
+  export
+  errCovering : trm -> List VarName -> Either (BBErr $ TplErr t) a
+  errCovering t ns = Left $ B (Custom $ ErrCovering ns) (cast t)
+
 export
 notField : ByteBounded VarName -> t -> Either (BBErr $ TplErr t) a
 notField (B v b) rec =  Left $ B (Custom $ ErrNotField v rec) b
@@ -92,6 +97,9 @@ notCon (B v b) rec =  Left $ B (Custom $ ErrNotCon v rec) b
 
 typeMsg : Interpolation e => Interpolation f => e -> f -> String
 typeMsg e f = "Type mismatch: can't unify \{f} (found) with \{e} (expected)"
+
+cases : List VarName -> String
+cases = unlines . map interpolate
 
 export
 Interpolation t => Interpolation (TplErr t) where
@@ -110,3 +118,4 @@ Interpolation t => Interpolation (TplErr t) where
   interpolate ErrUnsupported    = "Feature not implemened yet"
   interpolate ErrSum            = "Can't infer type of sum type"
   interpolate (ErrExpSum t)     = "Expected sum type but got \{t}"
+  interpolate (ErrCovering ns)  = "Pattern match is not covering. Missing cases: \{cases ns}"
