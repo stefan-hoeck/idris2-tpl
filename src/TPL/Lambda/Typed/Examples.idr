@@ -130,6 +130,12 @@ example =
   safePred : Nat -> MaybeNat;
   safePred = λn : Nat . if iszero n then <none = unit> else <some = pred n>;
 
+  fromMaybeNat : MaybeNat -> Nat;
+  fromMaybeNat =
+    λx : MaybeNat . case x of
+        <none = _> => 0
+      | <some = n> => n;
+
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
   %eval c2 succ 4;
@@ -147,6 +153,8 @@ example =
       };
   %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
   %eval safePred 10;
+  %eval fromMaybeNat (safePred 10);
+  %eval fromMaybeNat (safePred 0);
   """
 
 unclosedTypeParen : String

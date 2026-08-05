@@ -298,6 +298,41 @@ parameters (env : Env Entry)
     (tt ** pt) <- tcrec ps
     Right (_ ** ((v,h)::pt))
 
+  tcclausesAs :
+       {sc : _}
+    -> (bb  : ByteBounds)
+    -> (sum : Tpe)
+    -> (res : Tpe)
+    -> (ps  : List (VarName,Tpe))
+    -> (cs  : List (ByteBounded VarName,BindName,Term))
+    -> Either LamErr (SClauses ps res sc)
+  tcclausesAs bb sum res []            []              = Right []
+  tcclausesAs bb sum res []            (x :: xs)       = notCon (fst x) sum
+  tcclausesAs bb sum res (x :: xs)     []              = errCovering bb (fst <$> x::xs)
+  tcclausesAs bb sum res ((v,t) :: xs) ((w,n,x) :: ys) =
+    case v == w.val of
+      False => notCon w sum
+      True  => Prelude.do
+        sx  <- tc {sc = sc :< V n t} (Just res) x
+        sys <- tcclausesAs bb sum res xs ys
+        pure (SC n sx::sys)
+
+  tcclauses :
+       {sc : _}
+    -> (bb  : ByteBounds)
+    -> (sum : Tpe)
+    -> (ps  : List (VarName,Tpe))
+    -> (cs  : List (ByteBounded VarName,BindName,Term))
+    -> Either LamErr (res ** SClauses ps res sc)
+  tcclauses bb sum ((v,t) :: xs) ((w,n,x) :: ys) =
+    case v == w.val of
+      False => notCon w sum
+      True  => Prelude.do
+        (res ** sx) <- tc {sc = sc :< V n t} Nothing x
+        sys <- tcclausesAs bb sum res xs ys
+        pure (res ** (SC n sx::sys))
+  tcclauses bb sum xs ys = (\x => (_ ** x)) <$> tcclausesAs bb sum TUnit xs ys
+
   tc m (TVar b v)     =
     case findNVar ((NM v ==) . name) sc of
       Just (V (NM n) tp ** nv) => check m b (SVar b nv)
@@ -387,7 +422,11 @@ parameters (env : Env Entry)
         se        <- tc (Just t) e
         Right (t ** SIf b si sy se)
 
-  tc m (TCase b _ _) = unsupported b
+  tc m (TCase b x cs) = Prelude.do
+    (TSum ps ** x2) <- tc {sc} Nothing x | (tp ** _) => errExpSum x tp
+    case m of
+      Just t  => SCase b x2 <$> tcclausesAs b (TSum ps) t ps cs
+      Nothing => (\(t ** scs) => (t ** SCase b x2 scs)) <$> tcclauses b (TSum ps) ps cs
 
   export %inline
   typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)
