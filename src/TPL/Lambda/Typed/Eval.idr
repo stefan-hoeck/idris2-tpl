@@ -104,6 +104,10 @@ eval e (SIf b pred fst snd) =
   case eval e pred of
     VBool True  => eval e fst
     VBool False => eval e snd
+eval e (SCase b x cs) =
+  let VSum _ prf v := eval e x
+      (n ** sc)    := getClause prf cs
+   in eval (e :< Strict v) sc
 eval e (SFix b y) =
   case eval e y of
     VLam v t1 e2 scope => eval (e2 :< Delayed (eval e (SFix b y))) scope
