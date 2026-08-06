@@ -1,25 +1,10 @@
-#set page(
-  paper : "a4"
-)
-#set text(
-  font : "Liberation Sans"
-)
-
-#set heading(
-  numbering : "1."
-)
-
-#set par(
-  justify : true
-)
-
 = Boolean Terms
 
-In this very basic example language, we are going to learn
+In this very basic example, we are going to learn
 how to model and parse a very simple language of boolean expressions.
-Expressions in this language are always well-typed, so there is
+These expressions are always well-typed, so there is
 no need for a type checker. In addition, expressions can always
-be evaluated to boolean value in a finite number of steps.
+be evaluated to boolean values in a finite number of steps.
 
 In the TAPL book, this is the very first example demonstrating
 baisc concepts like definitions of syntactic forms, inference rules,
@@ -158,12 +143,12 @@ fact, that Idris accepts things as provably total.
 
 === Pretty Printing Terms
 
-As we are going to see when we discuss parsing, comming up with grammar
+As we are going to see when we discuss parsing, coming up with grammar
 rules and writing a parser for the syntax of our languages can be
 quite a challenge. It is therefore important that parsers are
 rigorously tested.
 
-A straight forward way for testing the parser in the presence of
+A straight forward way for testing the parser in the precense of
 correct syntax is to randomly generate syntax trees, convert them
 to string representation via a pretty printer (or several pretty
 printers) and verify that the parser returns exactly the syntax
