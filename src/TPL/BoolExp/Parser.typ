@@ -11,13 +11,13 @@ While not as straight forward as using a library of parser combinators or
 manually writing a recursive descent parser, this approach has several
 advantages:
 
-/ Totality: #ilex parsers are provably total
-/ Stack safety: #ilex parsers are stack safe even in the precense of deeply nested
-  syntax trees
+/ Totality: #ilex parsers are provably total.
+/ Stack safety: #ilex parsers are stack safe even in the presence of deeply nested
+  syntax trees.
 / Streaming: #ilex parsers can be used to stream huge amounts of data in constant
-  memory with no or only minor adjustments
+  memory with no or only minor adjustments.
 / Performance: #ilex parsers have been shown to process dozens to hundreds of
-  megabytes of data per second on modern hardware
+  megabytes of data per second on modern hardware.
 
 === Syntax
 
@@ -67,8 +67,8 @@ import public TPL.BoolExp.Term
   ["TERM","THEN","ELSE","CLOSE","DONE","ERR"]
 ```
 
-This definex six numeric constants representing the different types
-of lexers that we are going to use when parsing expressions. The
+This defines six numeric constants representing the different
+lexers that we are going to use when parsing expressions. The
 actual lexers will be defined further below.
 
 Let's have a quick look at these:
@@ -82,9 +82,10 @@ Let's have a quick look at these:
 
 All lexers except `ERR` recognize and ignore whitespace and line comments.
 
-Having an error lexer is useful, because it allows us to write exceptions
+Having an error lexer is beneficial for readability as well as
+performance, because it allows us to write exceptions
 to a mutable reference and continue with a lexer that will fail immediately,
-without having all state transition function return an `Either` for error
+without all state transition functions having to return an `Either` for error
 handling.
 
 === Parser Stack
@@ -98,7 +99,7 @@ switch to a different lexer.
 I _think_, there should be a direct correlation between the parser
 stack and the syntax tree, so it _should_ be possible to derive the
 structure of the parser stack automatically. I don't think this would
-simplify things, though, therefore I'll stick to defining the data type
+simplify things by a lot, though, therefore I'll stick to defining the data type
 manually.
 
 ```idris
@@ -119,7 +120,7 @@ SK = Stack Void STACK Lexers
 
 Alias `SK q` is used for the _mutable parser state_ running in state thread
 `q` (see the #ref1 library) that keeps track of the internal state of
-the parser (current chunk of bytes, start and end position of the current
+the parser (current byte vector, start and end position of the current
 token, a mutable reference holding the parser stack, and other utilities).
 
 === State Transitions
