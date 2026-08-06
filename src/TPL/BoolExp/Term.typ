@@ -148,7 +148,7 @@ rules and writing a parser for the syntax of our languages can be
 quite a challenge. It is therefore important that parsers are
 rigorously tested.
 
-A straight forward way for testing the parser in the precense of
+A straight forward way for testing the parser in the presence of
 correct syntax is to randomly generate syntax trees, convert them
 to string representation via a pretty printer (or several pretty
 printers) and verify that the parser returns exactly the syntax
