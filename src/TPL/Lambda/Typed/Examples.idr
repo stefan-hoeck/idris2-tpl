@@ -133,8 +133,8 @@ example =
   fromMaybeNat : MaybeNat -> Nat;
   fromMaybeNat =
     λx : MaybeNat . case x of
-        <none = _> => 0
-      | <some = n> => n;
+        <some = n> => n
+      | <none = _> => 0;
 
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;

@@ -1,6 +1,7 @@
 module TPL.Lambda.Typed.TT
 
 import Data.List.Quantifiers
+import TPL.Match
 import public TPL.Env
 import public TPL.Lambda.Typed.Term
 
@@ -19,16 +20,19 @@ PrimTpe (PNat _)  = TNat
 PrimTpe (PBool _) = TBool
 PrimTpe PUnit     = TUnit
 
-namespace SRecord
-  public export
-  data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type
+public export
+data RecEntry : (sc : Scope TTVar) -> (VarName, Tpe) -> Type
 
-namespace SClause
-  public export
-  record SClause (p : (VarName,Tpe)) (t : Tpe) (sc : Scope TTVar)
+public export
+data SClause  : (t : Tpe) -> (sc : Scope TTVar) -> (p : (VarName,Tpe)) -> Type
 
-  public export
-  data SClauses : List (VarName, Tpe) -> (t : Tpe) -> (sc : Scope TTVar) -> Type
+public export
+0 SClauses : List (VarName, Tpe) -> (t : Tpe) -> (sc : Scope TTVar) -> Type
+SClauses ps t sc = All (SClause t sc) ps
+
+public export
+0 SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type
+SRecord ps sc = All (RecEntry sc) ps
 
 public export
 data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
@@ -70,29 +74,16 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
   SPred  : ByteBounds -> STerm TNat sc -> STerm TNat sc
   SIsZ   : ByteBounds -> STerm TNat sc -> STerm TBool sc
 
-namespace SRecord
-  data SRecord : List (VarName, Tpe) -> (sc : Scope TTVar) -> Type where
-    Nil  : SRecord [] sc
-    (::) : (p : (VarName,STerm t sc)) -> SRecord ps sc -> SRecord ((fst p, t) :: ps) sc
+data RecEntry : (sc : Scope TTVar) -> (p : (VarName, Tpe)) -> Type where
+  RE : (n : VarName) -> (t : Tpe) -> STerm t sc -> RecEntry sc (n,t)
 
-namespace SClause
-  record SClause (p : (VarName, Tpe)) (t : Tpe) (sc : Scope TTVar) where
-    constructor SC
-    name  : BindName
-    term  : STerm t (sc:<V name (snd p))
+data SClause : (t : Tpe) -> (sc : Scope TTVar) -> (p : (VarName, Tpe)) -> Type where
+  SC : (p : _) -> (name : BindName) -> STerm t (sc:<V name (snd p)) -> SClause t sc p
 
-  data SClauses : List (VarName, Tpe) -> (t : Tpe) -> (sc : Scope TTVar) -> Type where
-    Nil  : SClauses [] t sc
-    (::) :
-         {p : (VarName,Tpe)}
-      -> SClause p t sc
-      -> SClauses ps t sc
-      -> SClauses (p::ps) t sc
-
-  export
-  getClause : IsField v ps t -> SClauses ps tp sc -> (n ** STerm tp (sc:<V n t))
-  getClause IFZ     ((::) {p = (v,t)} (SC n x) _) = (n ** x)
-  getClause (IFS x) (_::cs) = getClause x cs
+export
+getClause : IsField v ps t -> SClauses ps tp sc -> (n ** STerm tp (sc:<V n t))
+getClause IFZ     (SC (v,t) n x :: _) = (n ** x)
+getClause (IFS x) (_            ::cs) = getClause x cs
 
 fix :
      ByteBounds
@@ -105,8 +96,8 @@ fix b t v x y = SApp b (SLam NoBB v t y) (SFix NoBB (SLam NoBB v t x))
 
 export
 getField : IsField v ps t -> SRecord ps sc -> STerm t sc
-getField IFZ     ((_,t)::_) = t
-getField (IFS x) (_::ps)    = getField x ps
+getField IFZ     (RE _ _ t::_) = t
+getField (IFS x) (_::ps)       = getField x ps
 
 ||| Top-level definitions
 public export
@@ -143,11 +134,10 @@ restore (SPred b x)      = TApp b "pred" (restore x)
 restore (SIsZ b x)       = TApp b "iszero" (restore x)
 
 restoreRec b sp [] = TRec b (sp <>> [])
-restoreRec b sp ((v,t)::ps) = restoreRec b (sp:<(v,restore t)) ps
+restoreRec b sp (RE v _ t::ps) = restoreRec b (sp:<(v,restore t)) ps
 
 restoreCases sc [] = sc <>> []
-restoreCases sc ((::) {p} (SC n t) ts) =
-  restoreCases (sc:<(pure (fst p),n,restore t)) ts
+restoreCases sc (SC p n t::ts) = restoreCases (sc:<(pure (fst p),n,restore t)) ts
 
 --------------------------------------------------------------------------------
 -- Handling Scope
@@ -172,12 +162,12 @@ shiftImpl sol son (SSucc b x)        = SSucc b (shiftImpl sol son x)
 shiftImpl sol son (SPred b x)        = SPred b (shiftImpl sol son x)
 shiftImpl sol son (SIsZ b x)         = SIsZ b (shiftImpl sol son x)
 
-shiftRec sol son []          = []
-shiftRec sol son ((v,t)::ps) = (v,shiftImpl sol son t) :: shiftRec sol son ps
+shiftRec sol son []             = []
+shiftRec sol son (RE v t x::ps) = RE v t (shiftImpl sol son x) :: shiftRec sol son ps
 
 shiftClauses sol son [] = []
-shiftClauses sol son (SC t trm :: cs) =
-  SC t (shiftImpl (suc sol) son trm) :: shiftClauses sol son cs
+shiftClauses sol son (SC p t trm :: cs) =
+  SC p t (shiftImpl (suc sol) son trm) :: shiftClauses sol son cs
 
 export %inline
 Shiftable TTVar (STerm t) where genShift = shiftImpl
@@ -202,16 +192,16 @@ strImpl s t (SPred b x)      = SPred b <$> strImpl s t x
 strImpl s t (SIsZ b x)       = SIsZ b <$> strImpl s t x
 
 strRec s t [] = Just []
-strRec s t ((v,r)::ps) =
+strRec s t (RE v tp r::ps) =
   let Just sr  := strImpl s t r | _ => Nothing
       Just sps := strRec s t ps | _ => Nothing
-   in Just $ (v,sr)::sps
+   in Just $ RE v tp sr::sps
 
 strClauses s t [] = Just []
-strClauses s t (SC tp x :: cs) =
+strClauses s t (SC p tp x :: cs) =
   let Just sx  := strImpl s (suc t) x | _ => Nothing
       Just scs := strClauses s t cs   | _ => Nothing
-   in Just $ SC tp sx :: scs
+   in Just $ SC p tp sx :: scs
 
 export %inline
 Strengthenable TTVar (STerm t) where genStrengthen = strImpl
@@ -236,10 +226,10 @@ embedImpl (SPred b x)        = SPred b $ embedImpl x
 embedImpl (SIsZ b x)         = SIsZ b $ embedImpl x
 
 embedRec [] = []
-embedRec ((v,t)::ps) = (v,embedImpl t) :: embedRec ps
+embedRec (RE v t x::ps) = RE v t (embedImpl x) :: embedRec ps
 
 embedClauses [] = []
-embedClauses (SC tp x::cs) = SC tp (embedImpl x) :: embedClauses cs
+embedClauses (SC p tp x::cs) = SC p tp (embedImpl x) :: embedClauses cs
 
 export %inline
 Embeddable TTVar (STerm t) where embed = embedImpl
@@ -296,42 +286,28 @@ parameters (env : Env Entry)
   tcrec ((v,t)::ps) = Prelude.do
     (ht ** h) <- tc Nothing t
     (tt ** pt) <- tcrec ps
-    Right (_ ** ((v,h)::pt))
+    Right (_ ** (RE v ht h::pt))
 
   tcclausesAs :
        {sc : _}
-    -> (bb  : ByteBounds)
-    -> (sum : Tpe)
     -> (res : Tpe)
-    -> (ps  : List (VarName,Tpe))
-    -> (cs  : List (ByteBounded VarName,BindName,Term))
+    -> All (Matching (BindName,Term)) ps
     -> Either LamErr (SClauses ps res sc)
-  tcclausesAs bb sum res []            []              = Right []
-  tcclausesAs bb sum res []            (x :: xs)       = notCon (fst x) sum
-  tcclausesAs bb sum res (x :: xs)     []              = errCovering bb (fst <$> x::xs)
-  tcclausesAs bb sum res ((v,t) :: xs) ((w,n,x) :: ys) =
-    case v == w.val of
-      False => notCon w sum
-      True  => Prelude.do
-        sx  <- tc {sc = sc :< V n t} (Just res) x
-        sys <- tcclausesAs bb sum res xs ys
-        pure (SC n sx::sys)
+  tcclausesAs res []                  = Right []
+  tcclausesAs res (M v t (n,x) :: xs) = Prelude.do
+    sx  <- assert_total $ tc {sc = sc :< V n t} (Just res) x
+    sys <- tcclausesAs res xs
+    pure (SC _ n sx::sys)
 
   tcclauses :
        {sc : _}
-    -> (bb  : ByteBounds)
-    -> (sum : Tpe)
-    -> (ps  : List (VarName,Tpe))
-    -> (cs  : List (ByteBounded VarName,BindName,Term))
+    -> All (Matching (BindName,Term)) ps
     -> Either LamErr (res ** SClauses ps res sc)
-  tcclauses bb sum ((v,t) :: xs) ((w,n,x) :: ys) =
-    case v == w.val of
-      False => notCon w sum
-      True  => Prelude.do
-        (res ** sx) <- tc {sc = sc :< V n t} Nothing x
-        sys <- tcclausesAs bb sum res xs ys
-        pure (res ** (SC n sx::sys))
-  tcclauses bb sum xs ys = (\x => (_ ** x)) <$> tcclausesAs bb sum TUnit xs ys
+  tcclauses (M v t (n,x) :: xs) = Prelude.do
+    (res ** sx) <- assert_total $ tc {sc = sc :< V n t} Nothing x
+    sys <- tcclausesAs res xs
+    pure (res ** (SC _ n sx::sys))
+  tcclauses [] = (\x => (_ ** x)) <$> tcclausesAs TUnit []
 
   tc m (TVar b v)     =
     case findNVar ((NM v ==) . name) sc of
@@ -424,9 +400,10 @@ parameters (env : Env Entry)
 
   tc m (TCase b x cs) = Prelude.do
     (TSum ps ** x2) <- tc {sc} Nothing x | (tp ** _) => errExpSum x tp
+    ms              <- match b (TSum ps) ps cs
     case m of
-      Just t  => SCase b x2 <$> tcclausesAs b (TSum ps) t ps cs
-      Nothing => (\(t ** scs) => (t ** SCase b x2 scs)) <$> tcclauses b (TSum ps) ps cs
+      Just t  => SCase b x2 <$> tcclausesAs t ms
+      Nothing => (\(t ** scs) => (t ** SCase b x2 scs)) <$> tcclauses ms
 
   export %inline
   typecheck : {sc : _} -> Term -> Either LamErr (t ** STerm t sc)

@@ -119,4 +119,4 @@ eval e (SPred b y) = let VNat n := eval e y in VNat (pred n)
 eval e (SIsZ b y)  = let VNat n := eval e y in VBool (isZero n)
 
 rec e [] = []
-rec e ((v,t)::ps) = (v,eval e t)::rec e ps
+rec e (RE v _ t::ps) = (v,eval e t)::rec e ps
