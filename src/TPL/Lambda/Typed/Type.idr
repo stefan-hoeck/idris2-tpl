@@ -49,13 +49,16 @@ tpeAppAll (sx :< x) y = tpeAppAll sx (PFun (cast x <+> cast y) x y)
 public export
 data Tpe : Type where
   TNat  : Tpe
-  TBool : Tpe
   TUnit : Tpe
   TFun  : Tpe -> Tpe -> Tpe
   TRec  : List (VarName,Tpe) -> Tpe
   TSum  : List (VarName,Tpe) -> Tpe
 
 %runElab derive "Tpe" [Show,Eq]
+
+public export
+TBool : Tpe
+TBool = TSum [("false", TUnit), ("true", TUnit)]
 
 public export
 data IsField : VarName -> List (VarName,Tpe) -> Tpe -> Type where
@@ -84,7 +87,6 @@ pairEq : (x,y : (VarName,Tpe)) -> Maybe0 (x === y)
 
 tpeEq : (x,y : Tpe) -> Maybe0 (x === y)
 tpeEq TNat  TNat                = Just0 Refl
-tpeEq TBool TBool               = Just0 Refl
 tpeEq TUnit TUnit               = Just0 Refl
 tpeEq (TFun a1 r1) (TFun a2 r2) = maybeCong2 TFun (tpeEq a1 a2) (tpeEq r1 r2)
 tpeEq (TRec r1) (TRec r2)       = maybeCong TRec (pairsEq r1 r2)
@@ -106,7 +108,6 @@ public export
 public export
 0 IType : Tpe -> Type
 IType TNat       = Nat
-IType TBool      = Bool
 IType TUnit      = Unit
 IType (TFun x y) = IType x -> IType y
 IType (TRec ps)  = HList (RecTypes ps)
@@ -122,7 +123,6 @@ MTpe = Maybe Tpe
 export
 Cast Tpe RawTpe where
   cast TNat       = PVar NoBB "Nat"
-  cast TBool      = PVar NoBB "Bool"
   cast TUnit      = PVar NoBB "Unit"
   cast (TFun x y) = PFun NoBB (cast x) (cast y)
   cast (TRec ps)  = assert_total $ PRec NoBB (map cast <$> ps)

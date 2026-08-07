@@ -60,7 +60,6 @@ MapBounds Pattern where mapBounds = mapPatBounds
 public export
 data Prim : Type where
   PNat  : Nat -> Prim
-  PBool : Bool -> Prim
   PUnit : Prim
 
 %runElab derive "Prim" [Show,Eq]
@@ -68,7 +67,6 @@ data Prim : Type where
 export
 Interpolation Prim where
   interpolate (PNat v)  = show v
-  interpolate (PBool v) = show v
   interpolate PUnit     = "unit"
 
 --------------------------------------------------------------------------------
@@ -114,10 +112,6 @@ data PTerm : Type where
   ||| sum type constructor
   PSum     : ByteBounds -> ByteBounded VarName -> PTerm -> PTerm
 
-  ||| `if ... then ... else` function. Eventually, this could be
-  ||| desugared into a pattern match on bools.
-  PIf      : ByteBounds -> (i,t,e : PTerm) -> PTerm
-
   PCase    :
        ByteBounds
     -> PTerm
@@ -145,7 +139,6 @@ Cast PTerm ByteBounds where
   cast (PPrim b _)         = b
   cast (PRec b _)          = b
   cast (PSum b _ _)        = b
-  cast (PIf b _ _ _)       = b
   cast (PCase b _ _)       = b
 
 export
@@ -160,8 +153,6 @@ MapBounds PTerm where
   mapBounds f (PPrim b y)           = PPrim (f b) y
   mapBounds f (PRec b y)            = assert_total $ PRec (f b) (map (mapBounds f) <$> y)
   mapBounds f (PSum b x y)          = PSum (f b) (mapBounds f x) (mapBounds f y)
-  mapBounds f (PIf b i t e)         =
-    PIf (f b) (mapBounds f i) (mapBounds f t) (mapBounds f e)
   mapBounds f (PCase b t cs)        =
     PCase (f b) (mapBounds f t) $ assert_total $
       (\(v,p,x) => (mapBounds f v, mapBounds f p, mapBounds f x)) <$> cs
@@ -173,10 +164,6 @@ nat bb n = PPrim bb (PNat n)
 export %inline
 int : ByteBounded Integer -> PTerm
 int (B i bb) = nat bb $ cast i
-
-export %inline
-bool : ByteBounded Bool -> PTerm
-bool (B b bb) = PPrim bb (PBool b)
 
 export %inline
 unit : ByteBounds -> PTerm
@@ -197,7 +184,11 @@ seq s t = PApp NoBB (PLam NoBB (PV PH) (PVar NoBB "Unit") t) s
 
 export %inline
 tif : ByteBounds -> PTerm -> PTerm -> PTerm -> PTerm
-tif b i t e = PIf (b <+> cast e) i t e
+tif b i t e =
+  PCase b (PAs NoBB i $ PVar NoBB "Bool")
+    [ (pure "true", cast PH, t)
+    , (pure "false", cast PH, e)
+    ]
 
 export %inline
 field : PTerm -> ByteBounded VarName -> PTerm
@@ -240,7 +231,6 @@ pretty (PApp _ t s)         = "\{appL t} \{paren s}"
 pretty (PPrim _ p)          = interpolate p
 pretty (PRec _ p)           = "{\{prettyFields [<] p}}"
 pretty (PSum _ v t)         = "<\{v.val}=\{pretty t}>"
-pretty (PIf _ i t e)        = "if \{pretty i} then \{pretty t} else \{pretty e}"
 pretty (PCase _ t cs)       = "case \{pretty t} of \{cases [<] cs}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"

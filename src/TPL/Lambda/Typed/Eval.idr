@@ -34,7 +34,6 @@ data Entry : Tpe -> Type where
 
 data Value : (t : Tpe) -> Type where
   VNat  : (n : Nat) -> Value TNat
-  VBool : (v : Bool) -> Value TBool
   VUnit : Value TUnit
   VRec  : (r : VRecord ps) -> Value (TRec ps)
   VSum  : (v : VarName) -> IsField v ps t -> Value t -> Value (TSum ps)
@@ -45,6 +44,11 @@ data Value : (t : Tpe) -> Type where
     -> (env : ScopedEnv (Entry . TTVar.type) sc)
     -> STerm t2 (sc:<V v t1)
     -> Value (TFun t1 t2)
+
+export
+vbool : Bool -> Value TBool
+vbool False = VSum "false" IFZ VUnit
+vbool True  = VSum "true" (IFS IFZ) VUnit
 
 public export
 0 TEnv : Scope TTVar -> Type
@@ -60,7 +64,6 @@ torec : VRecord ps -> List (VarName,Term)
 export
 toTerm : Value t -> Term
 toTerm (VNat v)       = TPrim NoBB (PNat v)
-toTerm (VBool v)      = TPrim NoBB (PBool v)
 toTerm VUnit          = TPrim NoBB PUnit
 toTerm (VRec r)       = TRec NoBB (torec r)
 toTerm (VSum f p v)   = TSum NoBB (B f NoBB) (toTerm v)
@@ -76,7 +79,6 @@ Interpolation (Value t) where
 export
 fromPrim : (p : Prim) -> Value (PrimTpe p)
 fromPrim (PNat k)  = VNat k
-fromPrim (PBool x) = VBool x
 fromPrim PUnit     = VUnit
 --------------------------------------------------------------------------------
 -- Big-step Evaluation
@@ -100,10 +102,6 @@ eval e (SApp b y z) =
     VLam v t1 e2 scope => eval (e2 :< Strict (eval e z)) scope
 eval e (SRec b y) = VRec (rec e y)
 eval e (SSum b v p t) = VSum v.val p (eval e t)
-eval e (SIf b pred fst snd) =
-  case eval e pred of
-    VBool True  => eval e fst
-    VBool False => eval e snd
 eval e (SCase b x cs) =
   let VSum _ prf v := eval e x
       (n ** sc)    := getClause prf cs
@@ -116,7 +114,7 @@ eval e (SLam _ v t sc) = VLam v t e sc
 eval e (SPrim _ p) = fromPrim p
 eval e (SSucc b y) = let VNat n := eval e y in VNat (S n)
 eval e (SPred b y) = let VNat n := eval e y in VNat (pred n)
-eval e (SIsZ b y)  = let VNat n := eval e y in VBool (isZero n)
+eval e (SIsZ b y)  = let VNat n := eval e y in vbool (isZero n)
 
 rec e [] = []
 rec e (RE v _ t::ps) = (v,eval e t)::rec e ps
