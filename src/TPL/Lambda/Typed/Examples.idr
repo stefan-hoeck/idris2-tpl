@@ -130,13 +130,13 @@ example =
 
   %alias MaybeNat : <none: Unit, some: Nat>;
   safePred : Nat -> MaybeNat;
-  safePred = λn : Nat . if iszero n then <none = unit> else <some = pred n>;
+  safePred = λn : Nat . if iszero n then <none> else <some = pred n>;
 
   fromMaybeNat : MaybeNat -> Nat;
   fromMaybeNat =
     λx : MaybeNat . case x of
         <some = n> => n
-      | <none = _> => 0;
+      | <none> => 0;
 
   %eval (unit;unit;unit;(λ_:Nat . unit) 12; 20);
   %eval c2 succ 0;
