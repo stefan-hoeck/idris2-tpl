@@ -67,6 +67,7 @@ ptrans =
         :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
         :: atoms
     , E EQ $ spaced [step' '=' TERM]
+    , E SUM_EQ $ spaced [step' '=' TERM, step '>' (posWithStack closeSum)]
 
     , E VAR $ spaced vars
     , E BINDNAME $ spaced bindsteps
@@ -76,6 +77,7 @@ ptrans =
     , E PAT_END $ spaced [step' ',' VAR, step '}' (withStack closePattern)]
 
     , E ANGLE_OPEN $ spaced [step' '<' VAR]
+    , E CASE_EQ $ spaced [step' '=' PATTERN, step '>' $ withStack noCasePat]
     , E ANGLE_CLOSE $ spaced [step' '>' DBL_ARROW]
     , E DBL_ARROW $ spaced [step' "=>" ATOM]
 

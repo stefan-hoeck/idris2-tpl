@@ -220,6 +220,8 @@ prettyFields : SnocList String -> List (VarName,PTerm) -> String
 
 cases : SnocList String -> List (ByteBounded VarName, Pattern, PTerm) -> String
 
+sumEq : PTerm -> String
+
 pretty : PTerm -> String
 pretty (PVar _ v)           = v.name
 pretty (PAs _ t tp)         = "\{paren t} as \{tp}"
@@ -230,7 +232,7 @@ pretty (PLetrec _ v t x sc) = "letrec \{v} : \{t} = \{pretty x} in \{pretty sc}"
 pretty (PApp _ t s)         = "\{appL t} \{paren s}"
 pretty (PPrim _ p)          = interpolate p
 pretty (PRec _ p)           = "{\{prettyFields [<] p}}"
-pretty (PSum _ v t)         = "<\{v.val}=\{pretty t}>"
+pretty (PSum _ v t)         = "<\{v.val}\{sumEq t}>"
 pretty (PCase _ t cs)       = "case \{pretty t} of \{cases [<] cs}"
 
 paren t = if isAtom t then pretty t else "(\{pretty t})"
@@ -240,10 +242,15 @@ caseRHS t = if isApp t then pretty t else "(\{pretty t})"
 prettyFields ss []          = fastConcat $ intersperse "," (ss <>> [])
 prettyFields ss ((n,t)::ps) = prettyFields (ss:<"\{n}=\{pretty t}") ps
 
+sumEq (PPrim _ $ PUnit) = ""
+sumEq t = "=\{pretty t}"
+
 appL (PApp _ t s) = "\{appL t} \{paren s}"
 appL t            = paren t
 
 cases ss [] = fastConcat $ intersperse "\n |" (ss <>> [])
+cases ss ((v,PV PH,x)::ts) =
+  cases (ss :< "  <\{v.val}> => \{caseRHS x}") ts
 cases ss ((v,p,x)::ts) =
   cases (ss :< "  <\{v.val}=\{p}> => \{caseRHS x}") ts
 

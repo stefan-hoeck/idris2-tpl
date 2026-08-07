@@ -9,9 +9,9 @@ import public TPL.Lambda.Typed.Declaration
 %language ElabReflection
 
 %runElab deriveParserState "Lexers" "Lexer"
-  [ "TOP", "TOP_SEP", "TERM", "ATOM", "ATOM_OR_CLOSE", "DOT", "EQ"
+  [ "TOP", "TOP_SEP", "TERM", "ATOM", "ATOM_OR_CLOSE", "DOT", "EQ", "SUM_EQ"
   , "VAR", "BINDNAME", "PATTERN", "PAT_NEW", "PAT_EQ", "PAT_END"
-  , "ANGLE_OPEN", "ANGLE_CLOSE", "DBL_ARROW"
+  , "ANGLE_OPEN", "ANGLE_CLOSE", "CASE_EQ", "DBL_ARROW"
   , "TYPE", "ARROW", "ALIAS_NAME", "COLON"
   , "ERR"
   ]
@@ -181,10 +181,17 @@ parameters {auto sk : SK q}
 
   export
   closeSum : BytePos -> STACK -> F1 q Lexer
+  closeSum y (SumFld s x f) = onAtom (PSum (BB x y) f $ unit NoBB) s
   closeSum y s =
     case endApp s of
       Term (SumFld s x f) t => onAtom (PSum (BB x y) f t) s
       _                     => die
+
+  export
+  noCasePat : STACK -> F1 q Lexer
+  noCasePat (CaseFld p b t st f) =
+    putStackAs (CasePat p b t st f $ cast PH) DBL_ARROW
+  noCasePat _ = die
 
   export
   endCase : STACK -> F1 q Lexer
@@ -309,11 +316,11 @@ parameters {auto sk : SK q}
   -- Patterns
 
   pattern : Pattern -> STACK -> F1 q Lexer
-  pattern p (Lam s x)            = putStackAs (LamPat s x p) COLON
-  pattern p (Let s x)            = putStackAs (LetPat s x p) EQ
-  pattern p (PatFld s x sp f)    = putStackAs (Pat s x $ sp:<(f, p)) PAT_END
-  pattern p (CaseFld s b x st f) = putStackAs (CasePat s b x st f p) ANGLE_CLOSE
-  pattern _ _                    = die
+  pattern p (Lam s x)              = putStackAs (LamPat s x p) COLON
+  pattern p (Let s x)              = putStackAs (LetPat s x p) EQ
+  pattern p (PatFld s x sp f)      = putStackAs (Pat s x $ sp:<(f, p)) PAT_END
+  pattern p (CaseFld s b x st f)   = putStackAs (CasePat s b x st f p) ANGLE_CLOSE
+  pattern _ _                      = die
 
   export
   placeholder : STACK -> F1 q Lexer
@@ -322,19 +329,19 @@ parameters {auto sk : SK q}
 
   export
   var : ByteBounded VarName -> STACK -> F1 q Lexer
-  var b (Top sx)             = putStackAs (TopFun (Top sx) b) TOP_SEP
-  var b (Record x y sx)      = putStackAs (RecordFld x y sx b.val) EQ
-  var b (RecordTpe x y sx)   = putStackAs (RecordTpeFld x y sx b.val) COLON
-  var b (Sum x y)            = putStackAs (SumFld x y b) EQ
-  var b (SumTpe x y sx)      = putStackAs (SumTpeFld x y sx b.val) COLON
-  var b (Lam s x)            = putStackAs (LamPat s x $ cast b) COLON
-  var b (Letrec s x)         = putStackAs (LetrecVar s x $ cast b) COLON
-  var b (Let s x)            = putStackAs (LetPat s x $ cast b) EQ
-  var b (Pat s p sp)         = putStackAs (PatFld s p sp b) PAT_EQ
-  var b (PatFld s p sp f)    = putStackAs (Pat s p $ sp:<(f, cast b)) PAT_END
-  var b (CaseOf s p x st)    = putStackAs (CaseFld s p x st b) PAT_EQ
-  var b (CaseFld s p x st f) = putStackAs (CasePat s p x st f $ cast b) ANGLE_CLOSE
-  var b s                    = onAtom (PVar b.bounds b.val) s
+  var b (Top sx)               = putStackAs (TopFun (Top sx) b) TOP_SEP
+  var b (Record x y sx)        = putStackAs (RecordFld x y sx b.val) EQ
+  var b (RecordTpe x y sx)     = putStackAs (RecordTpeFld x y sx b.val) COLON
+  var b (Sum x y)              = putStackAs (SumFld x y b) SUM_EQ
+  var b (SumTpe x y sx)        = putStackAs (SumTpeFld x y sx b.val) COLON
+  var b (Lam s x)              = putStackAs (LamPat s x $ cast b) COLON
+  var b (Letrec s x)           = putStackAs (LetrecVar s x $ cast b) COLON
+  var b (Let s x)              = putStackAs (LetPat s x $ cast b) EQ
+  var b (Pat s p sp)           = putStackAs (PatFld s p sp b) PAT_EQ
+  var b (PatFld s p sp f)      = putStackAs (Pat s p $ sp:<(f, cast b)) PAT_END
+  var b (CaseOf s p x st)      = putStackAs (CaseFld s p x st b) CASE_EQ
+  var b (CaseFld s p x st f)   = putStackAs (CasePat s p x st f $ cast b) ANGLE_CLOSE
+  var b s                      = onAtom (PVar b.bounds b.val) s
 
   export
   closePattern : STACK -> F1 q Lexer
