@@ -32,6 +32,8 @@ predef =
     , ("Nat",    Als TNat)
     , ("Bool",   Als TBool)
     , ("Unit",   Als TUnit)
+    , ("true",   Def TBool $ sbool True)
+    , ("false",  Def TBool $ sbool False)
     ]
 
 covering
@@ -111,8 +113,8 @@ example =
   evenOdd : EvenOdd;
   evenOdd =
     letrec io : EvenOdd =
-      { iseven = λn: Nat . if iszero n then True  else io.isodd  (pred n)
-      , isodd  = λn: Nat . if iszero n then False else io.iseven (pred n)
+      { iseven = λn: Nat . if iszero n then true  else io.isodd  (pred n)
+      , isodd  = λn: Nat . if iszero n then false else io.iseven (pred n)
       }
     in io;
 
@@ -151,7 +153,7 @@ example =
           , nat = factorial 4
           }
       };
-  %eval evenOdd.isodd {fst = factorial 5, snd = False}.fst;
+  %eval evenOdd.isodd {fst = factorial 5, snd = false}.fst;
   %eval safePred 10;
   %eval fromMaybeNat (safePred 10);
   %eval fromMaybeNat (safePred 0);
@@ -173,7 +175,7 @@ unclosedValBrace : String
 unclosedValBrace =
   """
   foo : {foo: Nat, bar : Bool};
-  foo = {foo = 12, bar = True
+  foo = {foo = 12, bar = true
   """
 
 covering

@@ -30,8 +30,7 @@ atoms =
   :: step '{' (posModStack SK record' VAR)
   :: step '<' (posModStack SK Sum VAR)
   :: step "unit" (boundsWithStack $ onAtom . unit)
-  :: bools (boundedWithStack $ onAtom . bool)
-  ++ nats  (boundedWithStack $ onAtom . int)
+  :: nats  (boundedWithStack $ onAtom . int)
   ++ vars
 
 bindsteps : Steps q Lexers SK

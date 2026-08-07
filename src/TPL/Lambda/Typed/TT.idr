@@ -17,7 +17,6 @@ record TTVar where
 public export
 PrimTpe : Prim -> Tpe
 PrimTpe (PNat _)  = TNat
-PrimTpe (PBool _) = TBool
 PrimTpe PUnit     = TUnit
 
 public export
@@ -58,12 +57,6 @@ data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
   SApp   : ByteBounds -> STerm (TFun s t) sc -> STerm s sc -> STerm t sc
   SPrim  : ByteBounds -> (p : Prim) -> STerm (PrimTpe p) sc
   SRec   : ByteBounds -> SRecord ps sc -> STerm (TRec ps) sc
-  SIf    :
-       ByteBounds
-    -> (pred : STerm TBool sc)
-    -> (fst  : STerm t sc)
-    -> (snd  : STerm t sc)
-    -> STerm t sc
   SCase  :
        ByteBounds
     -> STerm (TSum ps) sc
@@ -99,6 +92,11 @@ getField : IsField v ps t -> SRecord ps sc -> STerm t sc
 getField IFZ     (RE _ _ t::_) = t
 getField (IFS x) (_::ps)       = getField x ps
 
+export
+sbool : Bool -> STerm TBool sc
+sbool False = SSum NoBB (pure "false") %search $ SPrim NoBB PUnit
+sbool True  = SSum NoBB (pure "true") %search $ SPrim NoBB PUnit
+
 ||| Top-level definitions
 public export
 data Entry : Type where
@@ -126,7 +124,6 @@ restore (SLam b x t y)   = TLam b x (cast t) (restore y)
 restore (SPrim b p)      = TPrim b p
 restore (SRec b r)       = restoreRec b [<] r
 restore (SSum b v _ t)   = TSum b v (restore t)
-restore (SIf b i x y)    = TIf b (restore i) (restore x) (restore y)
 restore (SCase b x cs)   = TCase b (restore x) (restoreCases [<] cs)
 restore (SFix b x)       = TApp b "fix" (restore x)
 restore (SSucc b x)      = TApp b "succ" (restore x)
@@ -155,7 +152,6 @@ shiftImpl sol son (SLam b x t y)     = SLam b x t (shiftImpl (suc sol) son y)
 shiftImpl sol son (SPrim b p)        = SPrim b p
 shiftImpl sol son (SRec b p)         = SRec b (shiftRec sol son p)
 shiftImpl sol son (SSum b v p t)     = SSum b v p (shiftImpl sol son t)
-shiftImpl sol son (SIf b i t e)      = SIf b (shiftImpl sol son i) (shiftImpl sol son t) (shiftImpl sol son e)
 shiftImpl sol son (SCase b t cs)     = SCase b (shiftImpl sol son t) (shiftClauses sol son cs)
 shiftImpl sol son (SFix b x)         = SFix b (shiftImpl sol son x)
 shiftImpl sol son (SSucc b x)        = SSucc b (shiftImpl sol son x)
@@ -184,7 +180,6 @@ strImpl s t (SLam b x p y)   = SLam b x p <$> strImpl s (suc t) y
 strImpl s t (SPrim b p)      = Just $ SPrim b p
 strImpl s t (SRec b p)       = SRec b <$> strRec s t p
 strImpl s t (SSum b v p x)   = SSum b v p <$> strImpl s t x
-strImpl s t (SIf b i x y)    = [| SIf (pure b) (strImpl s t i) (strImpl s t x) (strImpl s t y) |]
 strImpl s t (SCase b i cs)   = [| SCase (pure b) (strImpl s t i) (strClauses s t cs) |]
 strImpl s t (SFix b x)       = SFix b <$> strImpl s t x
 strImpl s t (SSucc b x)      = SSucc b <$> strImpl s t x
@@ -218,7 +213,6 @@ embedImpl (SLam b x p y)     = SLam b x p (embedImpl y)
 embedImpl (SPrim b p)        = SPrim b p
 embedImpl (SRec b p)         = SRec b (embedRec p)
 embedImpl (SSum b v p t)     = SSum b v p (embedImpl t)
-embedImpl (SIf b i x y)      = SIf b (embedImpl i) (embedImpl x) (embedImpl y)
 embedImpl (SCase b x cs)     = SCase b (embedImpl x) (embedClauses cs)
 embedImpl (SFix b x)         = SFix b $ embedImpl x
 embedImpl (SSucc b x)        = SSucc b $ embedImpl x
@@ -385,18 +379,6 @@ parameters (env : Env Entry)
         Nothing          => notCon v (TSum ps)
       Just tp        => errExpSum b tp
       _              => errSum b
-
-  tc m (TIf b i y e)  = Prelude.do
-    si <- tc {sc} (Just TBool) i
-    case m of
-      Just t => Prelude.do
-        sy <- tc (Just t) y
-        se <- tc (Just t) e
-        Right (SIf b si sy se)
-      Nothing => Prelude.do
-        (t ** sy) <- tc Nothing y
-        se        <- tc (Just t) e
-        Right (t ** SIf b si sy se)
 
   tc m (TCase b x cs) = Prelude.do
     (TSum ps ** x2) <- tc {sc} Nothing x | (tp ** _) => errExpSum x tp

@@ -45,10 +45,6 @@ data Term : Type where
   ||| record constructor
   TSum   : ByteBounds -> ByteBounded VarName -> Term -> Term
 
-  ||| `if ... then ... else` function. Eventually, this could be
-  ||| desugared into a pattern match on bools.
-  TIf    : ByteBounds -> (i,t,e : Term) -> Term
-
   ||| `case ... of` expressions.
   TCase  : ByteBounds -> Term -> List (ByteBounded VarName, BindName, Term) -> Term
 
@@ -70,7 +66,6 @@ Cast Term ByteBounds where
   cast (TPrim b _)         = b
   cast (TRec b _)          = b
   cast (TSum b _ _)        = b
-  cast (TIf b _ _ _)       = b
   cast (TCase b _ _)       = b
 
 unpats :
@@ -122,7 +117,6 @@ desugar (PApp b t s)         = TApp b (desugar t) (desugar s)
 desugar (PPrim b y)          = TPrim b y
 desugar (PRec b xs)          = TRec b (desugarRec xs)
 desugar (PSum b v t)         = TSum b v (desugar t)
-desugar (PIf b i t e)        = TIf b (desugar i) (desugar t) (desugar e)
 desugar (PCase b t ts)       = TCase b (desugar t) (desugarCase ts)
 
 desugarRec [] = []
@@ -153,7 +147,6 @@ resugar (TApp b t s)         = PApp b (resugar t) (resugar s)
 resugar (TPrim b y)          = PPrim b y
 resugar (TRec b xs)          = PRec b (resugarRec xs)
 resugar (TSum b v t)         = PSum b v (resugar t)
-resugar (TIf b i t e)        = PIf b (resugar i) (resugar t) (resugar e)
 resugar (TCase b t ts)       = PCase b (resugar t) (resugarCase ts)
 
 resugarRec [] = []

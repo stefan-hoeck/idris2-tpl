@@ -106,7 +106,7 @@ endTerm : PTerm -> STACK -> STACK
 endTerm t (LamTpe s b p tp)      = endTerm (PLam (fromPos b t) p tp t) s
 endTerm t (LetTrm s b p x)       = endTerm (PLet (fromPos b t) p x t) s
 endTerm t (LetrecTrm s b p x y)  = endTerm (PLetrec (fromPos b t) p x y t) s
-endTerm t (Else s b x y)         = endTerm (PIf (fromPos b t) x y t) s
+endTerm t (Else s b x y)         = endTerm (tif (fromPos b t) x y t) s
 endTerm t (CasePat s b x st v p) = endTerm (PCase (fromPos b t) x $ st <>> [(v,p,t)]) s
 endTerm t s                      = Term s t
 

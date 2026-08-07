@@ -94,7 +94,6 @@ prim : Gen PTerm
 prim =
   frequency
     [ (1, pure (PPrim NoBB PUnit))
-    , (1, (PPrim NoBB . PBool) <$> bool)
     , (3, (PPrim NoBB . PNat) <$> nat (linear 0 100))
     , (3, PVar NoBB <$> varname)
     ]
@@ -119,7 +118,6 @@ term = go 5
       frequency
         [ (1, prim)
         , (2, [| PApp bb (go k) (go k) |])
-        , (2, [| PIf  bb (go k) (go k) (go k) |])
         , (2, [| PLam bb pattern tpe (go k) |])
         , (2, [| PLet bb pattern (go k) (go k) |])
         , (2, [| PLetrec bb bindname tpe (go k) (go k) |])
