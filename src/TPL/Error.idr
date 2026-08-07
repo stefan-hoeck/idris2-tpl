@@ -25,6 +25,7 @@ data TplErr : Type -> Type where
   ErrUnknown        : (n : VarName) -> TplErr t
   ErrUnsupported    : TplErr t
   ErrCovering       : List VarName -> TplErr t
+  ErrUnreachable    : TplErr t
 
 %runElab derive "TplErr" [Show,Eq]
 
@@ -87,6 +88,10 @@ parameters {0 trm    : Type}
   errCovering : trm -> List VarName -> Either (BBErr $ TplErr t) a
   errCovering t ns = Left $ B (Custom $ ErrCovering ns) (cast t)
 
+  export
+  errUnreachable : trm -> Either (BBErr $ TplErr t) a
+  errUnreachable t = Left $ B (Custom ErrUnreachable) (cast t)
+
 export
 notField : ByteBounded VarName -> t -> Either (BBErr $ TplErr t) a
 notField (B v b) rec =  Left $ B (Custom $ ErrNotField v rec) b
@@ -119,3 +124,4 @@ Interpolation t => Interpolation (TplErr t) where
   interpolate ErrSum            = "Can't infer type of sum type"
   interpolate (ErrExpSum t)     = "Expected sum type but got \{t}"
   interpolate (ErrCovering ns)  = "Pattern match is not covering. Missing cases: \{cases ns}"
+  interpolate ErrUnreachable    = "Unreachable clause"
