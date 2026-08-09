@@ -1,4 +1,4 @@
-#import "../../../doc/template.typ": *
+#import "template.typ": *
 
 == Parsing Boolean Terms
 
