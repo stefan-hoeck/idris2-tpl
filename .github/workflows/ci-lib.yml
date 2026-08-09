@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install --yes wget
+          apt-get install --yes wget tar xz
           wget -qO typst.tar.xz https://github.com/typst/typst/releases/latest/download/typst-x86_64-unknown-linux-musl.tar.xz
           tar xf typst.tar.xz --strip-components=1 -C /usr/local/bin typst-x86_64-unknown-linux-musl/typst
       - name: Checkout
