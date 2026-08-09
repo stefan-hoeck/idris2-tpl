@@ -1,3 +1,5 @@
+#import "template.typ": *
+
 = Boolean Terms
 
 In this very basic example, we are going to learn
