@@ -31,3 +31,5 @@ jobs:
         run: pack install tpl
       - name: Test tpl
         run: pack test tpl -n 1000
+      - name: Make docs
+        run: ./makedocs.sh
