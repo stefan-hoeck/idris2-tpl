@@ -25,9 +25,17 @@ jobs:
       fail-fast: false
     container: ghcr.io/stefan-hoeck/idris2-pack:latest
     steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install --yes wget tar xz-utils
+          wget -qO typst.tar.xz https://github.com/typst/typst/releases/latest/download/typst-x86_64-unknown-linux-musl.tar.xz
+          tar xf typst.tar.xz --strip-components=1 -C /usr/local/bin typst-x86_64-unknown-linux-musl/typst
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build tpl
         run: pack install tpl
       - name: Test tpl
         run: pack test tpl -n 1000
+      - name: Make docs
+        run: ./makedocs.sh
