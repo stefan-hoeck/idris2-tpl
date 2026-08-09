@@ -25,6 +25,10 @@ jobs:
       fail-fast: false
     container: ghcr.io/stefan-hoeck/idris2-pack:latest
     steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install --yes typst
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build tpl

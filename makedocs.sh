@@ -3,6 +3,8 @@
 TTC=$(idris2 --ttc-version)
 BUILD="build/ttc/$TTC"
 
+mkdir -p pdf
+
 pack install-app katla-typst
 pack typecheck tpl
 
