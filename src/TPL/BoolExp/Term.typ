@@ -13,7 +13,7 @@ baisc concepts like definitions of syntactic forms, inference rules,
 and induction on terms. These things translate naturally and easily
 to Idris.
 
-== A Type for Boolean Terms
+== A Type for Boolean Terms <boolean_term>
 
 To keep things simple, we restrict this example to only
 boolean expressions. Arithmetic expressions with natural
@@ -143,7 +143,7 @@ The nice thing about this example is that many of the theorems
 discussed in the book immediately follow from the types and the
 fact, that Idris accepts things as provably total.
 
-=== Pretty Printing Terms
+=== Pretty Printing Terms <bool_pretty>
 
 As we are going to see when we discuss parsing, coming up with grammar
 rules and writing a parser for the syntax of our languages can be
