@@ -13,6 +13,8 @@ cp -v doc/template.typ pdf/template.typ
 
 katla-typst src/TPL/BoolExp/Term.typ "$BUILD"/TPL/BoolExp/Term.ttm >pdf/bool_term.typ
 katla-typst src/TPL/BoolExp/Parser.typ "$BUILD"/TPL/BoolExp/Parser.ttm >pdf/bool_parser.typ
+
 katla-typst src/TPL/ArExp/Term.typ "$BUILD"/TPL/ArExp/Term.ttm >pdf/arith_term.typ
+katla-typst src/TPL/ArExp/Parser.typ "$BUILD"/TPL/ArExp/Parser.ttm >pdf/arith_parser.typ
 
 typst c pdf/main.typ pdf/doc.pdf
