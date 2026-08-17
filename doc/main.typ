@@ -3,3 +3,4 @@
 
 #include("bool_term.typ")
 #include("bool_parser.typ")
+#include("arith_term.typ")

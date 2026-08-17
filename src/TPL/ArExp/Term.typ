@@ -1,3 +1,29 @@
+#import "template.typ": *
+#pagebreak()
+
+= Arithmetic Terms
+
+This section contains a direct translation of the arithmetic
+terms consisting of natural numbers and boolean values plus
+some basic operations on them. It is the first example where
+evaluation can get stuck, which justifies the introduction
+of type checking.
+
+The technique shown here will be also used in later sections:
+Untyped terms representing unmodified syntax trees are introduced
+as a plain Idris type together with a parser and pretty printer.
+
+Algorithms for desugaring, type checking, and evaluation follow.
+
+== A Type for Arithmetic Terms
+
+Type `Term` directly corresponds to the tiny language's syntax:
+We have primitives for natural numbers and boolean values,
+primitive functions `succ`, `pred`, and `iszero`, as well as
+the ternary `if` expression that could already be found in boolean
+terms.
+
+```idris
 module TPL.ArExp.Term
 
 import Data.SortedSet
@@ -18,7 +44,16 @@ data Term : Type where
   TIsZ   : ByteBounds -> Term -> Term -- iszero
 
 %runElab derive "Term" [Show,Eq]
+```
 
+Although this closely resembles the data type from @boolean_term, there
+is an important difference: All data constructors wrap a `ByteBounds` value
+describing the boundaries of the sub-expression as a pair of byte positions.
+These allow us to properly show the locations of type errors in the
+source code. In general, we'd like to implement two interfaces for
+manipulating these bounds:
+
+```idris
 export
 Cast Term ByteBounds where
   cast (TTrue x)     = x
@@ -39,7 +74,13 @@ MapBounds Term where
   mapBounds f (TSucc x y)   = TSucc (f x) (mapBounds f y)
   mapBounds f (TPred x y)   = TPred (f x) (mapBounds f y)
   mapBounds f (TIsZ x y)    = TIsZ (f x) (mapBounds f y)
+```
 
+=== Induction on Terms
+
+We again define some utilities for inspecting terms.
+
+```idris
 export
 isConst : Term -> Bool
 isConst (TTrue {})  = True
@@ -66,11 +107,19 @@ depth (TIf _ i t e) = max (depth i) (max (depth t) (depth e))
 depth (TSucc _ x)   = depth x + 1
 depth (TPred _ x)   = depth x + 1
 depth (TIsZ _ x)    = depth x + 1
+```
 
---------------------------------------------------------------------------------
--- Casts
---------------------------------------------------------------------------------
+=== Conversions
 
+The following utility functions will be useful for parsing. In particular,
+we slightly extend the syntax from the TAPL book by adding support for
+integer literals. These get converted to an inefficient tree representation
+of natural numbers: This example is so basic that any further optimizations
+are of no interest to us. A proper programming language would benefit
+from an optimized representation of natural numbers, just like Idris
+does it.
+
+```idris
 export
 nat : ByteBounds -> Nat -> Term
 nat bb Z     = TZ bb
@@ -84,11 +133,18 @@ export %inline
 bool : ByteBounded Bool -> Term
 bool (B True bb)  = TTrue bb
 bool (B False bb) = TFalse bb
+```
 
---------------------------------------------------------------------------------
--- Values
---------------------------------------------------------------------------------
+=== Values
 
+We include a type for values here: Terms that can not be reduced any more
+by following one of the evaluation rules presented in the book. In the
+book, values are a subset of terms, but we follow a slightly different
+approach here: We define a dedicated type for values but add support
+for converting values back to terms. This allows us to use the same
+pretty printer for values as for terms.
+
+```idris
 public export
 data Value : Type where
   VTrue  : Value
@@ -98,10 +154,20 @@ data Value : Type where
 
 %runElab derive "Value" [Show,Eq,Ord]
 
---------------------------------------------------------------------------------
--- Pretty Printing
---------------------------------------------------------------------------------
+export
+Cast Value Term where
+  cast VTrue     = TTrue NoBB
+  cast VFalse    = TFalse NoBB
+  cast VZero     = TZ NoBB
+  cast (VSucc x) = TSucc NoBB (cast x)
+```
 
+=== Pretty Printing
+
+For the same reasons described in @bool_pretty, we provide a pretty printer
+for terms and - via the `Cast` implementation - values:
+
+```idris
 pretty : Term -> String
 
 paren : Term -> String
@@ -118,16 +184,8 @@ pretty (TIsZ _ x)    = "iszero \{paren x}"
 export %inline
 Interpolation Term where interpolate = pretty
 
-prettyV : Value -> String
-
-parenV : Value -> String
-parenV v@(VSucc {}) = "(\{prettyV v})"
-parenV v            = prettyV v
-
-prettyV VTrue       = "true"
-prettyV VFalse      = "false"
-prettyV VZero       = "0"
-prettyV (VSucc x)   = "succ \{parenV x}"
-
 export %inline
-Interpolation Value where interpolate = prettyV
+Interpolation Value where interpolate = pretty . cast
+```
+
+// vi: filetype=idris2:syntax=typst
