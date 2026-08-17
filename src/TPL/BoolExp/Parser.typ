@@ -1,6 +1,6 @@
 #import "template.typ": *
 
-== Parsing Boolean Terms
+== Parsing Boolean Terms <bool_parse>
 
 In this section we are using the #ilex library to write a parser for
 simple boolean terms. We will first specify the syntax in ABNF form before
