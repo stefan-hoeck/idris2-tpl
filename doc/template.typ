@@ -33,6 +33,9 @@
   doc
 }
 
+/*
+* Referenced libraries
+*/
 #let lib(str) = emph(str)
 
 #let hockLib(str) = {
@@ -40,10 +43,15 @@
   footnote(link("https://github.com/stefan-hoeck/idris2-" + str + ".git"))
 }
 
-#let ilex     = lib("ilex")
-#let ref1     = lib("ref1")
-#let ilex_ref = hockLib("ilex")
-#let ref1_ref = hockLib("ref1")
+#let ilex        = lib("ilex")
+#let ref1        = lib("ref1")
+#let ilex_ref    = hockLib("ilex")
+#let ref1_ref    = hockLib("ref1")
+#let refined_ref = hockLib("refined")
+
+/*
+* Katla Settings
+*/
 
 #let IdrisCodeFont        = "Liberation Mono"
 #let IdrisColourData      = rgb("#ff6a6a")
