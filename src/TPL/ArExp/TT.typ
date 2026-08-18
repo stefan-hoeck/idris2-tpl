@@ -1,3 +1,8 @@
+#import "template.typ": *
+
+== Type Checking
+
+```idris
 module TPL.ArExp.TT
 
 import Derive.HDecEq
@@ -132,3 +137,6 @@ eval x =
   case step x of
     Left v   => v
     Right x2 => eval (assert_smaller x x2)
+```
+
+// vi: filetype=idris2:syntax=typst
