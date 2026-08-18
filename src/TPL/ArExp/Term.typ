@@ -135,33 +135,6 @@ bool (B True bb)  = TTrue bb
 bool (B False bb) = TFalse bb
 ```
 
-=== Values
-
-We include a type for values here: Terms that can not be reduced any more
-by following one of the evaluation rules presented in the book. In the
-book, values are a subset of terms, but we follow a slightly different
-approach here: We define a dedicated type for values but add support
-for converting values back to terms. This allows us to use the same
-pretty printer for values as for terms.
-
-```idris
-public export
-data Value : Type where
-  VTrue  : Value
-  VFalse : Value
-  VZero  : Value
-  VSucc  : Value -> Value
-
-%runElab derive "Value" [Show,Eq,Ord]
-
-export
-Cast Value Term where
-  cast VTrue     = TTrue NoBB
-  cast VFalse    = TFalse NoBB
-  cast VZero     = TZ NoBB
-  cast (VSucc x) = TSucc NoBB (cast x)
-```
-
 === Pretty Printing
 
 For the same reasons described in @bool_pretty, we provide a pretty printer
@@ -183,9 +156,6 @@ pretty (TIsZ _ x)    = "iszero \{paren x}"
 
 export %inline
 Interpolation Term where interpolate = pretty
-
-export %inline
-Interpolation Value where interpolate = pretty . cast
 ```
 
 // vi: filetype=idris2:syntax=typst

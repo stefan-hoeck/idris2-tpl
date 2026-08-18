@@ -49,7 +49,7 @@ but also the nonsensical `(succ succ) 0`. We might be able (I haven't
 verified this) to get away without parentheses in this primitive language,
 but in later examples we are going to have arbitrary numbers of function
 arguments. Then, proper grouping of a composite argument by wrapping it
-in parentheses will be mandator. We call such a grouping an _atom_,
+in parentheses will be mandatory. We call such a grouping an _atom_,
 and it comes with its own restricted lexer.
 
 ```idris
@@ -94,7 +94,7 @@ SK = Stack (TplErr Tpe) STACK Lexers
 
 In addition to the already familiar state transitions for
 completing terms and closing parentheses, there are two additional
-utilities: one for starting and `if` expression, the other for
+utilities: one for starting an `if` expression, the other for
 introducing a primitive function call. Note how we request
 an `ATOM` lexer after encountering a primitive function.
 
