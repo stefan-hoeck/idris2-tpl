@@ -7,3 +7,4 @@
 #include("arith_term.typ")
 #include("arith_parser.typ")
 #include("arith_tt.typ")
+#include("arith_example.typ")

@@ -1,3 +1,14 @@
+#import "template.typ": *
+
+== Example Applications
+
+Below are a couple of example applications plus
+a utility for testing them at the REPL. Of special
+interest are the ill-typed example programs:
+These demonstrate the proper highliting of the invalid
+regions in the source code.
+
+```idris
 module TPL.ArExp.Example
 
 import public TPL.ArExp.Parser
@@ -53,4 +64,6 @@ testAr s =
   case parseEval s of
     Left x  => putStrLn "\{toParseError Virtual s x}"
     Right s => putStrLn s
+```
 
+// vi: filetype=idris2:syntax=typst

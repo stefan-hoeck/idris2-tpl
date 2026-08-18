@@ -17,5 +17,6 @@ katla-typst src/TPL/BoolExp/Parser.typ "$BUILD"/TPL/BoolExp/Parser.ttm >pdf/bool
 katla-typst src/TPL/ArExp/Term.typ "$BUILD"/TPL/ArExp/Term.ttm >pdf/arith_term.typ
 katla-typst src/TPL/ArExp/Parser.typ "$BUILD"/TPL/ArExp/Parser.ttm >pdf/arith_parser.typ
 katla-typst src/TPL/ArExp/TT.typ "$BUILD"/TPL/ArExp/TT.ttm >pdf/arith_tt.typ
+katla-typst src/TPL/ArExp/Example.typ "$BUILD"/TPL/ArExp/Example.ttm >pdf/arith_example.typ
 
 typst c pdf/main.typ pdf/doc.pdf
