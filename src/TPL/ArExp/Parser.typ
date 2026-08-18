@@ -78,12 +78,12 @@ the rest is identical to the stack type for boolean expressions:
 ```idris
 data STACK : Type where
   Top   : STACK
-  If    : STACK -> ByteBounds -> STACK
-  Fun   : STACK -> (Term -> Term) -> STACK
+  If    : STACK -> BytePos -> STACK
+  Fun   : STACK -> BytePos -> (ByteBounds -> Term -> Term) -> STACK
   Open  : STACK -> STACK
   Paren : STACK -> Term -> STACK
-  Then  : STACK -> ByteBounds -> Term -> STACK
-  Else  : STACK -> ByteBounds -> Term -> Term -> STACK
+  Then  : STACK -> BytePos -> Term -> STACK
+  Else  : STACK -> BytePos -> Term -> Term -> STACK
   Done  : Term -> STACK
 
 0 SK : Type -> Type
@@ -102,11 +102,11 @@ an `ATOM` lexer after encountering a primitive function.
 parameters {auto sk : SK q}
 
   onTerm : Term -> STACK -> F1 q Lexer
-  onTerm x (If p b)       = putStackAs (Then p b x) THEN
-  onTerm x (Fun p f)      = onTerm (f x) p
+  onTerm x (If p s)       = putStackAs (Then p s x) THEN
+  onTerm x (Fun p s f)    = endPos >>= \e => onTerm (f (BB s e) x) p
   onTerm x (Open p)       = putStackAs (Paren p x) CLOSE
-  onTerm x (Then p b y)   = putStackAs (Else p b y x) ELSE
-  onTerm x (Else p b y z) = onTerm (TIf (b <+> cast x) y z x) p
+  onTerm x (Then p s y)   = putStackAs (Else p s y x) ELSE
+  onTerm x (Else p s y z) = endPos >>= \e => onTerm (TIf (BB s e) y z x) p
   onTerm x _              = putStackAs (Done x) DONE
 
   onClose : F1 q Lexer
@@ -116,10 +116,7 @@ parameters {auto sk : SK q}
       _         => pure ERR -- not possible
 
   onFun : (ByteBounds -> Term -> Term) -> F1 q Lexer
-  onFun f = bounds >>= \b => modStackAs SK (`Fun` f b) ATOM
-
-  onIf : F1 q Lexer
-  onIf = bounds >>= \b => modStackAs SK (`If` b) TERM
+  onFun f = posModStack SK (\p,s => Fun p s f) ATOM
 ```
 
 === Lexers
@@ -143,7 +140,7 @@ ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
     [ E TERM $ spaced $
-        [ step (like "if")     onIf
+        [ step (like "if")     (posModStack SK If TERM)
         , step (like "succ")   (onFun TSucc)
         , step (like "pred")   (onFun TPred)
         , step (like "iszero") (onFun TIsZ)
