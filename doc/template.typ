@@ -1,8 +1,11 @@
 #let padblock(cont) = pad(x: 2em, y: 1em, cont)
 
 #let template = doc => {
+  let resetFootnoteCounter = counter(footnote).update(0)
+
   set page(
-    paper : "a4"
+    paper  : "a4",
+    header : resetFootnoteCounter,
   )
   set text(
     font : "Liberation Sans"
