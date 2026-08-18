@@ -40,7 +40,7 @@ Interpolation Tpe where
 ```
 
 The first thing to note is that `Tpe` implements `HDecEq`, an
-interface for hemi-decidable equality from the _refined_ library.
+interface for hemi-decidable equality from the #refined_ref library.
 This is a critical thing to have to verify the propositional
 equality between two types while at the same time being easier
 to implement than proper decidable equality. In fact, implementing
