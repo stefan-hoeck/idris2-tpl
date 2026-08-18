@@ -2,7 +2,7 @@
 
 == Parsing Boolean Terms <bool_parse>
 
-In this section we are using the #ilex_ref library to write a parser for
+In this section we are using the #ilex library to write a parser for
 simple boolean terms. We will first specify the syntax in ABNF form before
 defining a data type for the parser stack, state transition rules, and
 finally assign regular expressions to state transitions.
@@ -119,7 +119,7 @@ SK = Stack Void STACK Lexers
 ```
 
 Alias `SK q` is used for the _mutable parser state_ running in state thread
-`q` (see the #ref1_ref library) that keeps track of the internal state of
+`q` (see the #ref1 library) that keeps track of the internal state of
 the parser (current byte vector, start and end position of the current
 token, a mutable reference holding the parser stack, and other utilities).
 

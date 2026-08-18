@@ -39,18 +39,25 @@
 /*
 * Referenced libraries
 */
-#let lib(str) = emph(str)
 
-#let hockLib(str) = {
-  emph(str)
-  footnote(link("https://github.com/stefan-hoeck/idris2-" + str + ".git"))
+// This sets up a state variable for library `str` and checks, if
+// a link to it has already been written to a footnote. If yes, the
+// string is just emphasized, otherwise a footnote with the libs
+// GitHub URL is provided and the library state updated.
+#let gitlib(str) = {
+  let x = state(str,true)
+  context {
+    emph(str)
+    if x.get() {
+      x.update(false);
+      footnote(link("https://github.com/stefan-hoeck/idris2-" + str + ".git"))
+    }
+  }
 }
 
-#let ilex        = lib("ilex")
-#let ref1        = lib("ref1")
-#let ilex_ref    = hockLib("ilex")
-#let ref1_ref    = hockLib("ref1")
-#let refined_ref = hockLib("refined")
+#let ilex    = gitlib("ilex")
+#let ref1    = gitlib("ref1")
+#let refined = gitlib("refined")
 
 /*
 * Katla Settings
