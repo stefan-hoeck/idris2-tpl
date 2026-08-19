@@ -1,0 +1,38 @@
+tapl:
+  type: Book
+  title: "Types and Programming Languages"
+  author: Benjamin C. Pierce
+  year: 2002
+  publisher:
+    name: The MIT Press
+    location: Cambridge, Massachusetts
+
+Idris2:
+  type: repository
+  title: "Idris 2"
+  author: Edwin Brady
+  url: "https://github.com/idris-lang/Idris2"
+
+elab-util:
+  type: repository
+  title: "Idris 2 Elaborator Reflection: Utilities and Documentation"
+  author: Stefan Höck
+  url: "https://github.com/stefan-hoeck/idris2-elab-util"
+
+ilex:
+  type: repository
+  title: "ilex: Generating fast Lexers from an Idris2 DSL"
+  author: Stefan Höck
+  url: "https://github.com/stefan-hoeck/idris2-ilex"
+
+ref1:
+  type: repository
+  title: "Linear mutable References and Utilities"
+  author: Stefan Höck
+  url: "https://github.com/stefan-hoeck/idris2-ref1"
+
+refined:
+  type: repository
+  title: "idris2-refined: Refinement types for Idris2"
+  author: Stefan Höck
+  url: "https://github.com/stefan-hoeck/idris2-refined"

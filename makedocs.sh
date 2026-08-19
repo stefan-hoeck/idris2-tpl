@@ -8,8 +8,7 @@ mkdir -p pdf
 pack install-app katla-typst
 pack typecheck tpl
 
-cp -v doc/main.typ pdf/main.typ
-cp -v doc/template.typ pdf/template.typ
+cp -v doc/* pdf/
 
 katla-typst src/TPL/BoolExp/Term.typ "$BUILD"/TPL/BoolExp/Term.ttm >pdf/bool_term.typ
 katla-typst src/TPL/BoolExp/Parser.typ "$BUILD"/TPL/BoolExp/Parser.ttm >pdf/bool_parser.typ

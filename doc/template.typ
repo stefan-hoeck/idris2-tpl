@@ -5,10 +5,31 @@
 
   set page(
     paper  : "a4",
-    header : resetFootnoteCounter,
+    header : context {
+               if counter(page).get().at(0) > 1 {
+                 set text(size: 0.8em)
+                 resetFootnoteCounter
+                 align(center)[Types and Programming Languages in Idris2]
+               }
+             },
+    footer: context {
+              if counter(page).get().at(0) > 1 {
+                set align(center)
+                set text(size: 0.8em)
+                counter(page).display(
+                  "1 / 1",
+                  both: true,
+                )
+              }
+            }
   )
+
   set text(
-    font : "Liberation Sans"
+    font: "New Computer Modern"
+  )
+
+  set cite(
+    style: "nlm-citation-sequence-superscript"
   )
 
   let num(..nums) = {
@@ -44,20 +65,22 @@
 // a link to it has already been written to a footnote. If yes, the
 // string is just emphasized, otherwise a footnote with the libs
 // GitHub URL is provided and the library state updated.
-#let gitlib(str) = {
+#let lib(str) = {
   let x = state(str,true)
   context {
-    emph(str)
+    text(str, fill: olive, weight: "semibold")
     if x.get() {
       x.update(false);
-      footnote(link("https://github.com/stefan-hoeck/idris2-" + str + ".git"))
+      cite(label(str))
     }
   }
 }
 
-#let ilex    = gitlib("ilex")
-#let ref1    = gitlib("ref1")
-#let refined = gitlib("refined")
+#let Idris2    = lib("Idris2")
+#let ilex      = lib("ilex")
+#let ref1      = lib("ref1")
+#let refined   = lib("refined")
+#let elab_util = lib("elab-util")
 
 /*
 * Katla Settings

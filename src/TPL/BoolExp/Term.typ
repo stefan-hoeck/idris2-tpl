@@ -1,5 +1,7 @@
 #import "template.typ": *
 
+#pagebreak()
+
 = Boolean Terms
 
 In this very basic example, we are going to learn
@@ -17,7 +19,7 @@ to Idris.
 
 To keep things simple, we restrict this example to only
 boolean expressions. Arithmetic expressions with natural
-numbers and booleans will be dealt with in a later section.
+numbers and booleans will be dealt with in @arithmetic.
 
 Syntactically, boolean terms are either values (`true` or `false`)
 or `if ... then ... else` expressions:
@@ -44,6 +46,10 @@ data Term : Type where
 
 %runElab derive "Term" [Show,Eq,Ord]
 ```
+
+Throughout this project, I'm going to use elaborator reflection
+to derive basic interface implementations. The necessary functionality
+is provided by the #elab_util library.
 
 === Induction on Terms
 
