@@ -1,7 +1,7 @@
 #import "template.typ": *
 #pagebreak()
 
-= Arithmetic Terms
+= Arithmetic Terms <arithmetic>
 
 This section contains a direct translation of the arithmetic
 terms consisting of natural numbers and boolean values plus
