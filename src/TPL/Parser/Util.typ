@@ -1,3 +1,15 @@
+== Parsing
+
+Before we dive into the first examples from the book, we are going
+to have a look at a fundamental and non-trivial
+aspect of writing a programming language: Parsing.
+
+Writing a correct, performant parser is a non-trivial task in my experience,
+no matter the tools and libraries we are going to be using. A lot of ink
+has been spilt on the topic, and I did my own share of experimenting
+with different approaches in #Idris2.
+
+```idris
 module TPL.Parser.Util
 
 import public Data.DPair
@@ -117,3 +129,7 @@ parameters {auto hs : HasStack s (Exists p)}
   export %inline
   eboundedWithStack : ({0 x : _} -> ByteBounded a -> p x -> F1 q b) -> a -> F1 q b
   eboundedWithStack f v = bounds >>= \b => ewithStack (f $ B v b)
+```
+
+// vi: filetype=idris2:syntax=typst
+
