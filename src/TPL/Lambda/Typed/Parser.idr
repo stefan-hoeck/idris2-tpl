@@ -1,5 +1,6 @@
 module TPL.Lambda.Typed.Parser
 
+import Text.ILex.Debug
 import Syntax.T1
 import TPL.Lambda.Typed.Parser.State
 import TPL.Parser.Util
@@ -39,20 +40,20 @@ bindsteps = step '_' (withStack placeholder) :: vars
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ E TOP $ spaced $
+    [ spaced TOP $
            step' "%alias" ALIAS_NAME
         :: step "%eval" (modStackAs SK Eval TERM)
         :: vars
-    , E TOP_SEP $ spaced $ [step' '=' TERM, step' ':' TYPE]
-    , E TERM $ spaced $
+    , spaced TOP_SEP [step' '=' TERM, step' ':' TYPE]
+    , spaced TERM $
            step lambda (posModStack SK Lam PATTERN)
         :: step "if" (posModStack SK If TERM)
         :: step "let" (posModStack SK Let PATTERN)
         :: step "letrec" (posModStack SK Letrec BINDNAME)
         :: step "case" (posModStack SK Case TERM)
         :: atoms
-    , E ATOM $ spaced atoms
-    , E ATOM_OR_CLOSE $ spaced $
+    , spaced ATOM atoms
+    , spaced ATOM_OR_CLOSE $
            step ';' (withStack termSemicolon)
         :: step ')' (withStack closeTerm)
         :: step '}' (posWithStack closeRecord)
@@ -66,30 +67,30 @@ ptrans =
         :: step "of" (withStack of')
         :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
         :: atoms
-    , E EQ $ spaced [step' '=' TERM]
-    , E SUM_EQ $ spaced [step' '=' TERM, step '>' (posWithStack closeSum)]
+    , spaced EQ [step' '=' TERM]
+    , spaced SUM_EQ [step' '=' TERM, step '>' (posWithStack closeSum)]
 
-    , E VAR $ spaced vars
-    , E BINDNAME $ spaced bindsteps
-    , E PATTERN $ spaced $ step '{' (posModStack SK pat PAT_NEW) :: bindsteps
-    , E PAT_NEW $ spaced $ step '}' (withStack closePattern) :: vars
-    , E PAT_EQ $ spaced [step' '=' PATTERN]
-    , E PAT_END $ spaced [step' ',' VAR, step '}' (withStack closePattern)]
+    , spaced VAR vars
+    , spaced BINDNAME bindsteps
+    , spaced PATTERN $ step '{' (posModStack SK pat PAT_NEW) :: bindsteps
+    , spaced PAT_NEW $ step '}' (withStack closePattern) :: vars
+    , spaced PAT_EQ [step' '=' PATTERN]
+    , spaced PAT_END [step' ',' VAR, step '}' (withStack closePattern)]
 
-    , E ANGLE_OPEN $ spaced [step' '<' VAR]
-    , E CASE_EQ $ spaced [step' '=' PATTERN, step '>' $ withStack noCasePat]
-    , E ANGLE_CLOSE $ spaced [step' '>' DBL_ARROW]
-    , E DBL_ARROW $ spaced [step' "=>" ATOM]
+    , spaced ANGLE_OPEN [step' '<' VAR]
+    , spaced CASE_EQ [step' '=' PATTERN, step '>' $ withStack noCasePat]
+    , spaced ANGLE_CLOSE [step' '>' DBL_ARROW]
+    , spaced DBL_ARROW [step' "=>" ATOM]
 
-    , E TYPE $ spaced $
+    , spaced TYPE $
           step "(" (posModStack SK OpnTpe TYPE)
        :: step "{" (posModStack SK recordTpe VAR)
        :: step "<" (posModStack SK sumTpe VAR)
        :: upperName (withStack . typeAtom . pvar)
 
-    , E ALIAS_NAME $ spaced $ upperName (withStack . alias)
-    , E COLON $ spaced [step' ':' TYPE]
-    , E ARROW $ spaced $
+    , spaced ALIAS_NAME $ upperName (withStack . alias)
+    , spaced COLON [step' ':' TYPE]
+    , spaced ARROW $
         [ step' "->" TYPE
         , step ')' (withStack closeType)
         , step '}' (posWithStack closeRecordType)

@@ -89,10 +89,10 @@ atoms =
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ E TERM $ spaced $ step lambda (boundsWithStack onLambda) :: atoms
-    , E ATOM $ spaced $ close ')' (withStack onClose) :: atoms
-    , E VAR  $ spaced $ varName (withStack . onVar)
-    , E DOT  $ spaced [step' '.' TERM]
+    [ spaced TERM $ step lambda (boundsWithStack onLambda) :: atoms
+    , spaced ATOM $ close ')' (withStack onClose) :: atoms
+    , spaced VAR  $ varName (withStack . onVar)
+    , spaced DOT  [step' '.' TERM]
     ]
 
 perr : Arr32 Lexers (SK q -> F1 q LamErr)

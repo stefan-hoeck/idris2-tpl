@@ -21,21 +21,15 @@ advantages:
 
 === Syntax
 
-Below are the production rules in ABNF form:
+Below are the production rules in ABNF form (they reference other
+productions, defined earlier in @parsing):
 
 ```abnf
 WS_TERM   = WS TERM WS
 
-TERM      = VALUE
+TERM      = BOOL
           / '(' WS_TERM ')'
           / %s"if" WS_TERM %s"then" WS_TERM %s"else" WS_TERM
-
-VALUE     = %s"true" / %s"false"
-
-WS        = *(WHITE / COMMENT)
-WHITE     = 1*(%x0a / %x0d / %x09 / %x20); whitespace
-COMMENT   = %x2d.2d *PRINTABLE; line comment starting with '--'
-PRINTABLE = %x20-%x7e / %xa0-%xd7ff / %xe000-%x10ffff; non-control codepoints
 ```
 
 As can be seen, the terminals are just `true` and `false`, with the non-terminals
@@ -174,16 +168,15 @@ as safe indices into this array:
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ E TERM $
-        spaced
-          [ step "true"  $ withStack $ onTerm (bool True)
-          , step "false" $ withStack $ onTerm (bool False)
-          , step "if"    $ modStackAs SK If TERM
-          , opn '('      $ modStackAs SK Open TERM
-          ]
-    , E THEN  $ spaced [step' "then" TERM]
-    , E ELSE  $ spaced [step' "else" TERM]
-    , E CLOSE $ spaced [close ")" onClose]
+    [ spaced TERM
+        [ step "true"  $ withStack $ onTerm (bool True)
+        , step "false" $ withStack $ onTerm (bool False)
+        , step "if"    $ modStackAs SK If TERM
+        , opn '('      $ modStackAs SK Open TERM
+        ]
+    , spaced THEN  [step' "then" TERM]
+    , spaced ELSE  [step' "else" TERM]
+    , spaced CLOSE [close ")" onClose]
     ]
 ```
 
