@@ -13,7 +13,7 @@ import public TPL.Lambda.Typed.Declaration
   , "VAR", "BINDNAME", "PATTERN", "PAT_NEW", "PAT_EQ", "PAT_END"
   , "ANGLE_OPEN", "ANGLE_CLOSE", "CASE_EQ", "DBL_ARROW"
   , "TYPE", "ARROW", "ALIAS_NAME", "COLON"
-  , "ERR"
+  , "COMMENT", "ERR"
   ]
 
 public export
@@ -100,7 +100,7 @@ pat s p = Pat s p [<]
 
 public export
 0 SK : Type -> Type
-SK = Stack TpeErr STACK Lexers
+SK = TPLState TpeErr STACK Declaration Lexers
 
 endTerm : PTerm -> STACK -> STACK
 endTerm t (LamTpe s b p tp)      = endTerm (PLam (fromPos b t) p tp t) s

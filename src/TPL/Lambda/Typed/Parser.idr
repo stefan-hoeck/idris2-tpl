@@ -37,23 +37,27 @@ atoms =
 bindsteps : Steps q Lexers SK
 bindsteps = step '_' (withStack placeholder) :: vars
 
+%inline
+toks : Lexer -> Steps q Lexers SK -> Entry Lexers (DFA q Lexers SK)
+toks = spaced
+
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ spaced TOP $
+    [ toks TOP $
            step' "%alias" ALIAS_NAME
         :: step "%eval" (modStackAs SK Eval TERM)
         :: vars
-    , spaced TOP_SEP [step' '=' TERM, step' ':' TYPE]
-    , spaced TERM $
+    , toks TOP_SEP [step' '=' TERM, step' ':' TYPE]
+    , toks TERM $
            step lambda (posModStack SK Lam PATTERN)
         :: step "if" (posModStack SK If TERM)
         :: step "let" (posModStack SK Let PATTERN)
         :: step "letrec" (posModStack SK Letrec BINDNAME)
         :: step "case" (posModStack SK Case TERM)
         :: atoms
-    , spaced ATOM atoms
-    , spaced ATOM_OR_CLOSE $
+    , toks ATOM atoms
+    , toks ATOM_OR_CLOSE $
            step ';' (withStack termSemicolon)
         :: step ')' (withStack closeTerm)
         :: step '}' (posWithStack closeRecord)
@@ -67,30 +71,30 @@ ptrans =
         :: step "of" (withStack of')
         :: bytes proj (\b => bounded' (field b) >>= withStack . projection)
         :: atoms
-    , spaced EQ [step' '=' TERM]
-    , spaced SUM_EQ [step' '=' TERM, step '>' (posWithStack closeSum)]
+    , toks EQ [step' '=' TERM]
+    , toks SUM_EQ [step' '=' TERM, step '>' (posWithStack closeSum)]
 
-    , spaced VAR vars
-    , spaced BINDNAME bindsteps
-    , spaced PATTERN $ step '{' (posModStack SK pat PAT_NEW) :: bindsteps
-    , spaced PAT_NEW $ step '}' (withStack closePattern) :: vars
-    , spaced PAT_EQ [step' '=' PATTERN]
-    , spaced PAT_END [step' ',' VAR, step '}' (withStack closePattern)]
+    , toks VAR vars
+    , toks BINDNAME bindsteps
+    , toks PATTERN $ step '{' (posModStack SK pat PAT_NEW) :: bindsteps
+    , toks PAT_NEW $ step '}' (withStack closePattern) :: vars
+    , toks PAT_EQ [step' '=' PATTERN]
+    , toks PAT_END [step' ',' VAR, step '}' (withStack closePattern)]
 
-    , spaced ANGLE_OPEN [step' '<' VAR]
-    , spaced CASE_EQ [step' '=' PATTERN, step '>' $ withStack noCasePat]
-    , spaced ANGLE_CLOSE [step' '>' DBL_ARROW]
-    , spaced DBL_ARROW [step' "=>" ATOM]
+    , toks ANGLE_OPEN [step' '<' VAR]
+    , toks CASE_EQ [step' '=' PATTERN, step '>' $ withStack noCasePat]
+    , toks ANGLE_CLOSE [step' '>' DBL_ARROW]
+    , toks DBL_ARROW [step' "=>" ATOM]
 
-    , spaced TYPE $
+    , toks TYPE $
           step "(" (posModStack SK OpnTpe TYPE)
        :: step "{" (posModStack SK recordTpe VAR)
        :: step "<" (posModStack SK sumTpe VAR)
        :: upperName (withStack . typeAtom . pvar)
 
-    , spaced ALIAS_NAME $ upperName (withStack . alias)
-    , spaced COLON [step' ':' TYPE]
-    , spaced ARROW $
+    , toks ALIAS_NAME $ upperName (withStack . alias)
+    , toks COLON [step' ':' TYPE]
+    , toks ARROW $
         [ step' "->" TYPE
         , step ')' (withStack closeType)
         , step '}' (posWithStack closeRecordType)
@@ -105,6 +109,7 @@ ptrans =
         , step "in" (withStack $ in' . endAs)
         , step "of" (withStack $ of' . endAs)
         ]
+    , E COMMENT block
     ]
 
 perr : Arr32 Lexers (SK q -> F1 q LamErr)
@@ -123,4 +128,4 @@ peoi st sk t =
 
 public export
 decls : P1 q LamErr (List Declaration)
-decls = P TOP (init $ Top [<]) ptrans (\x => (Nothing #)) perr peoi
+decls = P TOP (init COMMENT $ Top [<]) ptrans (\x => (Nothing #)) perr peoi
