@@ -24,18 +24,7 @@ FUN       = "succ" / "pred" / "iszero"
 ATOM      = VALUE
           / '(' WS_TERM ')'
 
-VALUE     = "true" / "false" / NAT
-
-NAT       = "0"
-          / %x31-%x39 1*DIGIT
-          / "0x" 1*HEXIT
-          / "0o" 1*OCTIT
-          / "0b" 1*BIT
-
-DIGIT     = %x30-%x39
-OCTIT     = %x30-%x37
-BIT       = %x30-%x31
-HEXIT     =
+VALUE     = BOOL / NAT
 ```
 
 === Types of Lexers
@@ -139,16 +128,16 @@ atomSteps =
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ E TERM $ spaced $
+    [ spaced TERM $
         [ step (like "if")     (posModStack SK If TERM)
         , step (like "succ")   (onFun TSucc)
         , step (like "pred")   (onFun TPred)
         , step (like "iszero") (onFun TIsZ)
         ] ++ atomSteps
-    , E ATOM $ spaced atomSteps
-    , E THEN  $ spaced [step' (like "then") TERM]
-    , E ELSE  $ spaced [step' (like "else") TERM]
-    , E CLOSE $ spaced [close ")" onClose]
+    , spaced ATOM  atomSteps
+    , spaced THEN  [step' (like "then") TERM]
+    , spaced ELSE  [step' (like "else") TERM]
+    , spaced CLOSE [close ")" onClose]
     ]
 ```
 
