@@ -1,9 +1,7 @@
 module ArExp
 
-import Data.Vect
-import Hedgehog
+import Util
 import TPL.ArExp.Parser
-import Text.ILex
 
 %default total
 
@@ -25,14 +23,15 @@ terms = go 5
         ]
 
 prop_roundtrip : Property
-prop_roundtrip =
-  property $ Prelude.do
-    t <- forAll terms
-    Right t === map clearBounds (parseString term Virtual "\{t}")
+prop_roundtrip = roundtrip term terms
+
+prop_roundtripBlock : Property
+prop_roundtripBlock = roundtripBlock term terms
 
 export
 props : Group
 props =
   MkGroup "TPL.ArExp.Term"
     [ ("prop_roundtrip", prop_roundtrip)
+    , ("prop_roundtripBlock", prop_roundtripBlock)
     ]

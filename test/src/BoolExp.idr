@@ -1,11 +1,12 @@
 module BoolExp
 
-import Data.Vect
-import Hedgehog
+import Util
 import TPL.BoolExp.Parser
-import Text.ILex
 
 %default total
+
+MapBounds Term where
+  mapBounds f t = t
 
 values : Gen Value
 values = element [VTrue, VFalse]
@@ -22,14 +23,15 @@ terms = go 4
         ]
 
 prop_roundtrip : Property
-prop_roundtrip =
-  property $ Prelude.do
-    t <- forAll terms
-    Right t === parseString term Virtual "\{t}"
+prop_roundtrip = roundtrip term terms
+
+prop_roundtripBlock : Property
+prop_roundtripBlock = roundtripBlock term terms
 
 export
 props : Group
 props =
   MkGroup "TPL.BoolExp.Term"
     [ ("prop_roundtrip", prop_roundtrip)
+    , ("prop_roundtripBlock", prop_roundtripBlock)
     ]
