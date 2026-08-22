@@ -217,7 +217,7 @@ record TPLState (e,s,a : Type) (r : Bits32) (q : Type) where
 %runElab derive "TPLState" [FullStack]
 ```
 
-Let's digest this a bit. The first couple of fields are mandators, as they
+Let's digest this a bit. The first couple of fields are mandatory, as they
 allow the #ilex run loop to update the byte position of the start and
 end byte of the current token (`from_` and `till_`) and to keep track
 of the opening positions of things like nested parentheses (`positions_`).
@@ -233,11 +233,11 @@ Fields `stack_`, `state_`, and `decls` represent the accumulated
 parser state: `stack_` holds the parser stack of partially processed
 syntax trees, `state_` can be used to store the current lexer
 (in general, we only use this when processing block comments),
-and `decl` allows us store and extract
+and `decl` allows us to store and extract
 the top level declarations processed so far.
 
 For convenient parsing and un-escaping of string literals,
-#ilex offers the `HasStringLits` interfaces, which requires the
+#ilex offers the `HasStringLits` interface, which requires the
 parser state to have a field called `strings_` of the given type.
 Likewise, interface `HasBBErr` is used for error handling and
 requires a field called `error_` of the given type.
@@ -246,7 +246,7 @@ In addition to these, we provide two custom fields for working
 with block comments: `comment` is the index of the block comment
 lexer, and `depth` is used to keep track of nested block comments.
 
-Implementation of the interfaces mentioned above
+Implementations of the interfaces mentioned above
 (`HasBytes`, `HasStringLits`, `HasStack`, and `HasBBErr`) can
 be derived automatically using elaborator reflection. All that's
 required is that the state fields have the correct names and types.
@@ -296,15 +296,15 @@ parameters {auto hb : HasBytes s}
     ]
 ```
 
-This requires some explanation: `s q` is the current mutable parser stack.
+This requires some explanation: `s q` is the current mutable parser state.
 It is parameterized over state thread `q` and updating it is a linear function
 again parameterized over `q` (see the #ref1 library for a
-thorough discussion about this technique).
+thorough discussion of this technique).
 
 Value `sz` (of type `Bits32`) is the number of different lexers used by
 the parser in question and `Index sz` wraps a value strictly smaller than
 `sz` and represents one of these lexers (they are stored in an array and
-can be conveniently and safely accessed vias this index).
+can be conveniently and safely accessed via this index).
 
 So, in order to parse natural number literals, we need a linear function
 that takes an integer as input and updates the parser state returning
@@ -376,7 +376,7 @@ spaced x ss =
 We also need to provide a lexer for recognizing tokens within
 a block comment. #ilex runs all its lexers without looking
 ahead or backtracking while using a maximum munch strategy.
-This means, that if we are not careful, `abc*/` will not be
+This means, that if we are not careful, a string like `abc*/` will not be
 recognized as the end of a block comment, unless we make sure,
 we handle the special characters `*` and `/` separately.
 
@@ -387,8 +387,8 @@ we are in a nested block comment (in which case the counter
 at `depth` is larger than zero), in which case we decrease the
 depth by one.
 
-Not, how we add specific expressions for single astersk (`*`)
-and forward slash characters. The must not be unified with the
+Note, how we add specific expressions for single asterisk (`*`)
+and forward slash characters. These must not be unified with the
 other characters accepted in a block comment as this would
 lead to the issues mentioned above with recognizing opening
 and closing tags.
