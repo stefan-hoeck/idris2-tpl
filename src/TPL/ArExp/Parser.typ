@@ -56,7 +56,7 @@ import public TPL.Parser.Util
 %language ElabReflection
 
 %runElab deriveParserState "Lexers" "Lexer"
-  ["TERM","ATOM","THEN","ELSE","CLOSE","DONE","ERR"]
+  ["TERM","ATOM","THEN","ELSE","CLOSE","DONE","COMMENT","ERR"]
 ```
 
 === Parser Stack
@@ -76,7 +76,7 @@ data STACK : Type where
   Done  : Term -> STACK
 
 0 SK : Type -> Type
-SK = Stack (TplErr Tpe) STACK Lexers
+SK = TPLState (TplErr Tpe) STACK Unit Lexers
 ```
 
 === State Transitions
@@ -138,6 +138,7 @@ ptrans =
     , spaced THEN  [step' (like "then") TERM]
     , spaced ELSE  [step' (like "else") TERM]
     , spaced CLOSE [close ")" onClose]
+    , E COMMENT block
     ]
 ```
 
@@ -173,7 +174,7 @@ peoi st sk t =
 
 public export
 term : P1 q ArErr Term
-term = P TERM (init Top) ptrans (\x => (Nothing #)) perr peoi
+term = P TERM (init COMMENT Top) ptrans (\x => (Nothing #)) perr peoi
 ```
 
 // vi: filetype=idris2:syntax=typst

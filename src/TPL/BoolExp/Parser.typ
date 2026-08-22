@@ -7,18 +7,6 @@ simple boolean terms. We will first specify the syntax in ABNF form before
 defining a data type for the parser stack, state transition rules, and
 finally assign regular expressions to state transitions.
 
-While not as straight forward as using a library of parser combinators or
-manually writing a recursive descent parser, this approach has several
-advantages:
-
-/ Totality: #ilex parsers are provably total.
-/ Stack safety: #ilex parsers are stack safe even in the presence of deeply nested
-  syntax trees.
-/ Streaming: #ilex parsers can be used to stream huge amounts of data in constant
-  memory with no or only minor adjustments.
-/ Performance: #ilex parsers have been shown to process dozens to hundreds of
-  megabytes of data per second on modern hardware.
-
 === Syntax
 
 Below are the production rules in ABNF form (they reference other
@@ -58,7 +46,7 @@ import public TPL.BoolExp.Term
 %language ElabReflection
 
 %runElab deriveParserState "Lexers" "Lexer"
-  ["TERM","THEN","ELSE","CLOSE","DONE","ERR"]
+  ["TERM","THEN","ELSE","CLOSE","DONE","COMMENT","ERR"]
 ```
 
 This defines six numeric constants representing the different
@@ -109,7 +97,7 @@ data STACK : Type where
 %runElab derive "STACK" [Show,Eq]
 
 0 SK : Type -> Type
-SK = Stack Void STACK Lexers
+SK = TPLState Void STACK Unit Lexers
 ```
 
 Alias `SK q` is used for the _mutable parser state_ running in state thread
@@ -177,6 +165,7 @@ ptrans =
     , spaced THEN  [step' "then" TERM]
     , spaced ELSE  [step' "else" TERM]
     , spaced CLOSE [close ")" onClose]
+    , E COMMENT block
     ]
 ```
 
@@ -214,7 +203,7 @@ peoi st sk t =
 
 public export
 term : P1 q (BBErr Void) Term
-term = P TERM (init Top) ptrans (\x => (Nothing #)) perr peoi
+term = P TERM (init COMMENT Top) ptrans (\x => (Nothing #)) perr peoi
 ```
 
 === Testing the Parser

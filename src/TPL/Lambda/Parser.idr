@@ -11,7 +11,7 @@ import public TPL.Lambda.Term
 %language ElabReflection
 
 %runElab deriveParserState "Lexers" "Lexer"
-  ["TERM","ATOM","VAR","DOT","ERR"]
+  ["TERM","ATOM","VAR","DOT","COMMENT","ERR"]
 
 data STACK : Type where
   Top   : STACK
@@ -27,7 +27,7 @@ data STACK : Type where
 
 public export
 0 SK : Type -> Type
-SK = Stack TpeErr STACK Lexers
+SK = TPLState TpeErr STACK Void Lexers
 
 endTerm : Term -> STACK -> STACK
 endTerm t (LamV s b v)   = endTerm (TLam (b <+> cast t) v t) s
@@ -37,6 +37,10 @@ endTerm t s              = Term s t
 endApp : STACK -> STACK
 endApp (App s t st) = endTerm (appAllSnoc t st) s
 endApp s            = Err
+
+%inline
+toks : Lexer -> Steps q Lexers SK -> Entry Lexers (DFA q Lexers SK)
+toks = spaced
 
 parameters {auto sk : SK q}
 
@@ -89,10 +93,11 @@ atoms =
 ptrans : Lex1 q Lexers SK
 ptrans =
   lex1
-    [ spaced TERM $ step lambda (boundsWithStack onLambda) :: atoms
-    , spaced ATOM $ close ')' (withStack onClose) :: atoms
-    , spaced VAR  $ varName (withStack . onVar)
-    , spaced DOT  [step' '.' TERM]
+    [ toks TERM $ step lambda (boundsWithStack onLambda) :: atoms
+    , toks ATOM $ close ')' (withStack onClose) :: atoms
+    , toks VAR  $ varName (withStack . onVar)
+    , toks DOT  [step' '.' TERM]
+    , E COMMENT block
     ]
 
 perr : Arr32 Lexers (SK q -> F1 q LamErr)
@@ -108,4 +113,4 @@ peoi st sk t =
 
 public export
 term : P1 q LamErr Term
-term = P TERM (init Top) ptrans (\x => (Nothing #)) perr peoi
+term = P TERM (init COMMENT Top) ptrans (\x => (Nothing #)) perr peoi

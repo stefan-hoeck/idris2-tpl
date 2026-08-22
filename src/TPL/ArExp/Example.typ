@@ -18,6 +18,10 @@ import public TPL.ArExp.Parser
 twelve : String
 twelve =
   """
+  /* a simple expression
+  *  with some nested parens and a nice comment
+  *  /* with nesting */
+  */
   if (iszero (pred (pred (pred 3))))
      then 12
      else (if false then 0b101 else 0b111)
