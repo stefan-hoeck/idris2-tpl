@@ -165,6 +165,7 @@ ptrans =
     , spaced THEN  [step' "then" TERM]
     , spaced ELSE  [step' "else" TERM]
     , spaced CLOSE [close ")" onClose]
+    , spaced DONE []
     , E COMMENT block
     ]
 ```
