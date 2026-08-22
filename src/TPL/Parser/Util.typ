@@ -419,5 +419,24 @@ block =
     ]
 ```
 
+One final note about block comments: In our parsers, we will accept
+block comments at the end of input without proper closing tags. This
+is convenient, as it allows us to comment out the remainder of the
+source code by adding only a single opening tag for a block comment
+even if there is already a block comment within or at the end of the
+section we are commenting out.
+
+Implementing this is straight forward: When processing the end of
+input, we do not check if we are currently in an unfinished block
+comment and just look at the parser stack to figure out if we are
+at a valid point for the end of input.
+
+We therefore add the following rules to our grammar:
+
+```abnf
+WS_END    = WS / BLOCK_END
+BLOCK_END = "/*" *BCHAR
+```
+
 // vi: filetype=idris2:syntax=typst
 
