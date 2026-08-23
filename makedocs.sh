@@ -22,5 +22,6 @@ katla-typst src/TPL/ArExp/Example.typ "$BUILD"/TPL/ArExp/Example.ttm >pdf/arith_
 
 katla-typst src/TPL/Name.typ "$BUILD"/TPL/Name.ttm >pdf/lambda_name.typ
 katla-typst src/TPL/Name/Scope.typ "$BUILD"/TPL/Name/Scope.ttm >pdf/lambda_scope.typ
+katla-typst src/TPL/Name/Var.typ "$BUILD"/TPL/Name/Var.ttm >pdf/lambda_var.typ
 
 typst c pdf/main.typ pdf/doc.pdf

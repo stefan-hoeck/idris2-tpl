@@ -109,7 +109,7 @@ Interpolation Term where interpolate = pretty
 
 public export
 data STerm : (sc : Scope VarName) -> Type where
-  SVar   : {nm : _} -> ByteBounds -> (v : NVar nm sc) -> STerm sc
+  SVar   : {nm : _} -> ByteBounds -> (v : Var nm sc) -> STerm sc
   SLam   : ByteBounds -> (v : VarName) -> STerm (sc:<v) -> STerm sc
   SApp   : ByteBounds -> (t,s : STerm sc) -> STerm sc
   SPrim  : ByteBounds -> Prim -> STerm sc
@@ -166,7 +166,7 @@ parameters (env : Env ClosedTerm)
   export
   scoped : {sc : _} -> Term -> Either LamErr (STerm sc)
   scoped (TVar b v)   =
-    case findNVar (v==) sc of
+    case findVar (v==) sc of
       Just (nm ** vr) => Right (SVar b vr)
       Nothing => case lookup v env of
         Just ct => Right $ embed ct
@@ -192,7 +192,7 @@ restore (SPred b x)     = TApp b "pred" (restore x)
 restore (SIsZ b x)      = TApp b "iszero" (restore x)
 
 export
-subst : {sc : _} -> {n : _} -> (0 v : NVar n sc) -> STerm sc -> STerm sc -> STerm sc
+subst : {sc : _} -> {n : _} -> (0 v : Var n sc) -> STerm sc -> STerm sc -> STerm sc
 subst v s (SVar {nm} b x) = if nm == n then s else SVar b x
 subst v s (SApp b t x)    = SApp b (subst v s t) (subst v s x)
 subst v s (SLam b x y)    = SLam b x $ subst (shift v) (shift s) y

@@ -47,5 +47,5 @@ envValImpl (_:<trm) IZ = trm
 envValImpl (i:<_)   (IS prf) = envValImpl i prf
 
 export %inline
-envVal : NVar v sc -> ScopedEnv p sc -> p v
-envVal (NV p prf) env = envValImpl env (fromNat p prf)
+envVal : Var v sc -> ScopedEnv p sc -> p v
+envVal (V p prf) env = envValImpl env (fromNat p prf)
