@@ -15,5 +15,6 @@
 
 #include("lambda_name.typ")
 #include("lambda_scope.typ")
+#include("lambda_var.typ")
 
 #bibliography("bib.yaml")

@@ -35,7 +35,7 @@ SRecord ps sc = All (RecEntry sc) ps
 
 public export
 data STerm : (t : Tpe) -> (sc : Scope TTVar) -> Type where
-  SVar   : {n : _} -> {t : _} -> ByteBounds -> NVar (V (NM n) t) sc -> STerm t sc
+  SVar   : {n : _} -> {t : _} -> ByteBounds -> Var (V (NM n) t) sc -> STerm t sc
   SField :
        ByteBounds
     -> (v : ByteBounded VarName)
@@ -304,7 +304,7 @@ parameters (env : Env Entry)
   tcclauses [] = (\x => (_ ** x)) <$> tcclausesAs TUnit []
 
   tc m (TVar b v)     =
-    case findNVar ((NM v ==) . name) sc of
+    case findVar ((NM v ==) . name) sc of
       Just (V (NM n) tp ** nv) => check m b (SVar b nv)
       _                        => case lookup v env of
         Just (Def _ ct) => check m b (embed ct)
