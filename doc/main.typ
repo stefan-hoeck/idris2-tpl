@@ -13,4 +13,7 @@
 #include("arith_tt.typ")
 #include("arith_example.typ")
 
+#include("lambda_name.typ")
+#include("lambda_scope.typ")
+
 #bibliography("bib.yaml")

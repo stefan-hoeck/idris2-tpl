@@ -7,6 +7,8 @@ import TPL.Name.LSizeOf
 
 %default total
 
+||| Wraps the length of snoc list `sx` together with a proof that
+||| it is indeed the length of `sx`.
 public export
 record SizeOf {a : Type} (sx : SnocList a) where
   constructor SO
@@ -33,7 +35,7 @@ public export
 suc : SizeOf as -> SizeOf (as :< a)
 suc (SO n p) = SO (S n) (S p)
 
--- ||| suc but from the right
+||| suc but from the right
 export
 sucL : SizeOf as -> SizeOf ([<a] ++ as)
 sucL (SO n p) = SO (S n) (sucL p)
