@@ -20,4 +20,7 @@ katla-typst src/TPL/ArExp/Parser.typ "$BUILD"/TPL/ArExp/Parser.ttm >pdf/arith_pa
 katla-typst src/TPL/ArExp/TT.typ "$BUILD"/TPL/ArExp/TT.ttm >pdf/arith_tt.typ
 katla-typst src/TPL/ArExp/Example.typ "$BUILD"/TPL/ArExp/Example.ttm >pdf/arith_example.typ
 
+katla-typst src/TPL/Name.typ "$BUILD"/TPL/Name.ttm >pdf/lambda_name.typ
+katla-typst src/TPL/Name/Scope.typ "$BUILD"/TPL/Name/Scope.ttm >pdf/lambda_scope.typ
+
 typst c pdf/main.typ pdf/doc.pdf
