@@ -11,7 +11,7 @@ match and leads to less confusion.
 
 In my experiments, I found it convenient to include additional
 information such as the type or value of a bound variable
-to a term's scope (which can then be interpreted as a typing
+in a term's scope (which can then be interpreted as a typing
 or evaluation context), so we abstract over the exact data types
 contained in a scope.
 
@@ -43,7 +43,7 @@ a variable with the closed term of a top-level definition). We
 define several type aliases and interfaces for such operations.
 
 Embedding a term in an outer scope is expected to be a no-op, since
-the de Bruijn indices (which count from the right) are unaffected.
+the de Bruijn indices (which count from the right) are unaffected by this.
 Ideally, embedding functions should be optimized away be the #Idris2
 identity optimizer.
 
@@ -80,7 +80,8 @@ export %inline
 strengthen :
      {auto str : Strengthenable t tm}
   -> SizeOf ns
-  -> tm (outer++ns) -> Maybe (tm outer)
+  -> tm (outer++ns)
+  -> Maybe (tm outer)
 strengthen s = genStrengthen s zero
 ```
 
