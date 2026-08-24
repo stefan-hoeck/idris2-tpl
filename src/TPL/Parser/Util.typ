@@ -275,6 +275,31 @@ init c v n buf = T1.do
   pure (TS n empty buf 0 0 rf rt ps sk st ds ss er c dp)
 ```
 
+We also want to push parsed declarations onto the corresponding
+`SnocList`, extract the declarations parsed so far when streaming a
+large source file, as well as when reaching the end of input.
+Here are some utilities to do just that:
+
+```idris
+export %inline
+pushDecl : TPLState e s a r q => a -> s -> Index r -> F1 q (Index r)
+pushDecl @{st} d sk x t =
+ let _ # t := push1 st.decls d t
+  in writeAs st.stack_ sk x t
+
+export
+decls : TPLState e s a r q -> F1 q (Either x $ List a)
+decls st t =
+ let sd # t := replace1 st.decls [<] t
+  in Right (sd <>> []) # t
+
+export
+declChunk : TPLState e s a r q -> F1 q (Maybe $ List a)
+declChunk st t =
+ let sd # t := replace1 st.decls [<] t
+  in maybeList sd # t
+```
+
 === State Transitions
 
 In order to define proper lexers, we have to pair regular expressions

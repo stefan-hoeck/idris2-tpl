@@ -349,7 +349,7 @@ statements.
 public export
 data Declaration : Type where
   Include : AnyFile -> Declaration
-  Defn    : VarName -> Term -> Declaration
+  Defn    : ByteBounds -> VarName -> Term -> Declaration
   Eval    : Term -> Declaration
 
 %runElab derive "Declaration" [Show,Eq]
