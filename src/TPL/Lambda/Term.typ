@@ -10,6 +10,7 @@ the beginning.
 ```idris
 module TPL.Lambda.Term
 
+import Data.FilePath.File
 import Derive.Prelude
 import TPL.Env
 import TPL.Name.Var
@@ -336,5 +337,24 @@ eval e t =
       VNat n <- eval e y | _ => failEval e t
       pure (VBool $ isZero n)
 ```
+
+=== Top-level Declarations
+
+We now define a simple data type for top-level declarations,
+which will allow us to write proper source files with
+global definitions, evaluation statements, and `#include`
+statements.
+
+```idris
+public export
+data Declaration : Type where
+  Include : AnyFile -> Declaration
+  Defn    : VarName -> Term -> Declaration
+  Eval    : Term -> Declaration
+
+%runElab derive "Declaration" [Show,Eq]
+```
+
+We are now ready to write a parser for our source files.
 
 // vi: filetype=idris2:syntax=typst
