@@ -4,8 +4,9 @@
 
 There are two kinds of environment we typically make use of:
 
-- Global environments map names to top-level definitions that
-  could also be imported from other source files.
+- Global environments map names to top-level definitions.
+  These have already been processed and validated, so they are
+  ready to be called from other functions.
 - Scoped or local environments map bound variables in scope to
   values in a type-safe manner.
 

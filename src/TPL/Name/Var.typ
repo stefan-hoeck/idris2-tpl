@@ -37,18 +37,14 @@ toNat : IsVar n v sc -> Nat
 toNat IZ     = Z
 toNat (IS n) = S (toNat n)
 
-||| We can always manifest the `IsVar` proof from the corresponding
-||| natural number.
-|||
-||| O(1), because this is recognized as the identity function by the
-||| Idris compiler.
+||| Manifest an `IsVar` proof from the corresponding natural number.
 export
 fromNat : (n : Nat) -> (0 prf : IsVar n v sc) -> IsVar n v sc
 fromNat {sc = _:<v} 0     IZ       = IZ
 fromNat             (S k) (IS prf) = IS (fromNat k prf)
 ```
 
-We can also use a proof of type `IsVar` to safely extract a
+We can use a proof of type `IsVar` to safely extract a
 variable from its scope:
 
 ```idris

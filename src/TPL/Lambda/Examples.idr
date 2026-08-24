@@ -81,15 +81,17 @@ testEnv =
     ]
 
 covering
-run : String -> Either (ParseError TpeErr) Term
+run : String -> Either (ParseError TpeErr) String
 run s = Prelude.do
   env <- testEnv
   ct  <- toTerm env s
-  pure (restore $ eval ct)
+  Right $ case eval [<] ct of
+    Left t  => "Stuck: \{t}"
+    Right v => "Value: \{cast {to = Term} v}"
 
 covering
 testEval : String -> IO ()
 testEval s =
   case run s of
     Left x  => putStrLn "\{x}"
-    Right t => putStrLn "\{t}"
+    Right t => putStrLn t
