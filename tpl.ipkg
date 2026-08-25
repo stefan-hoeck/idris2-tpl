@@ -3,7 +3,7 @@ version    = 0.0.1
 authors    = "Stefan Höck"
 depends    = base    >= 0.6.0
            , filepath
-           , ilex
+           , ilex-streams
            , ilex-debug
            , linear
            , ref1
