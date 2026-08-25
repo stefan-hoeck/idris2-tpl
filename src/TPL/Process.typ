@@ -30,26 +30,25 @@ import Text.ILex.FS
 %default total
 
 public export
-interface Interpolation e => Interpolation v => Language (0 e, d, t, v : Type) | d where
+interface Interpolation x => Interpolation v => Language x d t v | d where
   builtin : Env t
 
-  parser  : Parser1 (BBErr e) (List d)
+  parser  : Parser1 (BBErr x) (List d)
 
-  eval    : Env t -> d -> Either (BBErr e) (Env t, Maybe v)
+  eval    : Env t -> d -> Either (BBErr x) (Env t, Maybe v)
 
 proc1 :
      {auto lang : Language x d t v}
   -> SnocList v
   -> Origin
-  -> IORef (Env t)
+  -> Env t
   -> List d
-  -> IO1 (Either (ByteErr x) (List v))
-proc1 sv o ref []        t = Right (sv <>> []) # t
-proc1 sv o ref (x :: xs) t =
- let env # t := read1 ref t
-  in case eval env x of
-       Left  err    => Left (byteError o err) # t
-       Right (e2,m) => proc1 (maybe sv (sv:<) m) o ref xs t
+  -> Either (ByteErr x) (Env t, List v)
+proc1 sv o env []        = Right (env, sv <>> [])
+proc1 sv o env (x :: xs) =
+  case eval env x of
+    Left  err    => Left (byteError o err)
+    Right (e2,m) => proc1 (maybe sv (sv:<) m) o e2 xs
 
 parameters (0 d : Type)
            {auto lang : Language x d t v}
@@ -58,7 +57,11 @@ parameters (0 d : Type)
            {auto polh : PollH e}
 
   proc : Origin -> IORef (Env t) -> List d -> Async e es (List v)
-  proc o env vs = lift1 (proc1 [<] o env vs) >>= injectEither
+  proc o ref vs = Prelude.do
+    env        <- readref ref
+    (env2, vs) <- injectEither (proc1 [<] o env vs)
+    writeref ref env2
+    pure vs
 
   export
   streamDecls : File Abs -> AsyncPull e (List v) es (Env t)
@@ -84,7 +87,6 @@ public export
 0 Errs : Type -> List Type
 Errs e = [Errno, ByteErr e,String]
 
-
 handlers : (0 e : _) -> Interpolation e => All (\e => e -> Async Poll [] ()) (Errs e)
 handlers _ = mapProperty (stderrLn .) [interpolate, interpolate, interpolate]
 
@@ -100,10 +102,6 @@ export covering
 runProg : Interpolation e => Prog e () -> IO ()
 runProg prog = simpleApp $ handle (handlers e) prog
 
-export covering
-runStrm : Interpolation e => Strm e Void -> Prog e ()
-runStrm = mpullErr
-
 parameters (0 d : Type)
            {auto lang : Language x d t v}
 
@@ -113,8 +111,12 @@ parameters (0 d : Type)
     [_,p] <- liftIO getArgs | _ => throw "Invalid args"
     case AnyFile.parse p of
       Nothing => throw "Invalid source file path: '\{p}'"
-      Just (AF $ MkF p@(PAbs {}) f) => ?fooo_4
-      Just (AF $ MkF p@(PRel {}) f) => ?fooo_5
+      Just (AF f@(MkF (PAbs {}) _)) => mpullErr (processSrcFile d f)
+      Just (AF f@(MkF (PRel {}) _)) => Prelude.do
+        s <- getcwd String
+        case AbsPath.parse s of
+          Just p  => mpullErr (processSrcFile d $ p </> f)
+          Nothing => throw "Invalid working dir: '\{s}'"
 ```
 
 // vi: filetype=idris2:syntax=typst

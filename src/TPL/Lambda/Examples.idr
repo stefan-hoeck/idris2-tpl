@@ -30,7 +30,9 @@ Language TpeErr Declaration ClosedTerm Term where
       Left t  => stuck t
       Right t => Right (env, Just $ cast t)
 
+covering
 main : IO ()
+main = runProg (source Declaration)
 
 -- examples : String
 -- examples =
