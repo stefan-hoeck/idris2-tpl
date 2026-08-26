@@ -54,6 +54,7 @@ parameters (0 d : Type)
            {auto lang : Language x d t v}
            {auto hasn : Has Errno es}
            {auto hasb : Has (ByteErr x) es}
+           {auto hasf : Has (ParseError x) es}
            {auto polh : PollH e}
 
   proc : Origin -> IORef (Env t) -> List d -> Async e es (List v)
@@ -68,7 +69,7 @@ parameters (0 d : Type)
   streamDecls f =
    let pth := interpolate f
        o   := FileSrc pth
-    in locError {x = InnerError x} $ Prelude.do
+    in locError (InnerError x) $ Prelude.do
          env <- newref {s = World} (builtin @{lang})
          readBytes pth
            |> streamParseFrom o (parser @{lang})
@@ -85,10 +86,10 @@ parameters (0 d : Type)
 
 public export
 0 Errs : Type -> List Type
-Errs e = [Errno, ByteErr e,String]
+Errs e = [Errno, ByteErr e,ParseError e,String]
 
 handlers : (0 e : _) -> Interpolation e => All (\e => e -> Async Poll [] ()) (Errs e)
-handlers _ = mapProperty (stderrLn .) [interpolate, interpolate, interpolate]
+handlers _ = mapProperty (stderrLn .) [interpolate, interpolate, interpolate, interpolate]
 
 public export
 0 Prog : Type -> Type -> Type
