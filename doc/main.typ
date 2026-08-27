@@ -4,6 +4,7 @@
 #include("title.typ")
 #include("intro.typ")
 #include("parser.typ")
+#include("process.typ")
 
 #include("bool_term.typ")
 #include("bool_parser.typ")

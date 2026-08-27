@@ -11,6 +11,17 @@ define and reuse top-level definitions as well as add evaluation
 statements to print out the results of our computations.
 
 We are going to abstract over the programming language in question,
+and request a couple of capabilities from each of the tiny
+languages we will explor:
+
+- they must have a parseable syntax of top-level declarations
+- they must provide an environment of builtin functions
+  (usually, these are operations on values of primitive types)
+- given an environment of top-level definitions, they must be
+  able to process a new such definition, update the environment
+  accordingly, and produce some optional output
+
+These capabilities are grouped in interface `Language`:
 
 ```idris
 module TPL.Process
@@ -29,27 +40,22 @@ import Text.ILex.FS
 
 %default total
 
+||| An interface for tiny programming languages
+|||
+||| @x : the language's error type
+||| @d : type of top-level declarations
+||| @t : type of processed top-level definitions
+||| @v : type of values terms are being evaluated to
 public export
 interface Interpolation x => Interpolation v => Language x d t v | d where
   builtin : Env t
 
   parser  : Parser1 (BBErr x) (List d)
 
-  eval    : Env t -> d -> Either (BBErr x) (Env t, Maybe v)
+  eval    : Env t -> d -> Either (BBErr x) (Maybe v, Env t)
+```
 
-proc1 :
-     {auto lang : Language x d t v}
-  -> SnocList v
-  -> Origin
-  -> Env t
-  -> List d
-  -> Either (ByteErr x) (Env t, List v)
-proc1 sv o env []        = Right (env, sv <>> [])
-proc1 sv o env (x :: xs) =
-  case eval env x of
-    Left  err    => Left (byteError o err)
-    Right (e2,m) => proc1 (maybe sv (sv:<) m) o e2 xs
-
+```idris
 parameters (0 d : Type)
            {auto lang : Language x d t v}
            {auto hasn : Has Errno es}
@@ -57,24 +63,17 @@ parameters (0 d : Type)
            {auto hasf : Has (ParseError x) es}
            {auto polh : PollH e}
 
-  proc : Origin -> IORef (Env t) -> List d -> Async e es (List v)
-  proc o ref vs = Prelude.do
-    env        <- readref ref
-    (env2, vs) <- injectEither (proc1 [<] o env vs)
-    writeref ref env2
-    pure vs
-
   export
   streamDecls : File Abs -> AsyncPull e (List v) es (Env t)
   streamDecls f =
    let pth := interpolate f
        o   := FileSrc pth
     in locError (InnerError x) $ Prelude.do
-         env <- newref {s = World} (builtin @{lang})
          readBytes pth
            |> streamParseFrom o (parser @{lang})
-           |> evalMap (proc o env)
-           |> (>> readref env)
+           |> C.escanReturn (builtin @{lang})
+                (\e => mapFst (inject . byteError o) . eval e)
+           |> P.mapOutput catMaybes
 
   export
   processSrcFile : File Abs -> AsyncStream e es Void

@@ -11,6 +11,7 @@ pack typecheck tpl
 cp -v doc/* pdf/
 
 katla-typst src/TPL/Parser/Util.typ "$BUILD"/TPL/Parser/Util.ttm >pdf/parser.typ
+katla-typst src/TPL/Process.typ "$BUILD"/TPL/Process.ttm >pdf/process.typ
 
 katla-typst src/TPL/BoolExp/Term.typ "$BUILD"/TPL/BoolExp/Term.ttm >pdf/bool_term.typ
 katla-typst src/TPL/BoolExp/Parser.typ "$BUILD"/TPL/BoolExp/Parser.ttm >pdf/bool_parser.typ
