@@ -28,12 +28,14 @@ module TPL.Process
 
 import public Data.FilePath.File
 import public FS.Posix
+import public IO.Async.Console
+import public IO.Async.Logging
+import public IO.Async.Loop.Posix
 import public TPL.Env
 
 import Data.Linear.Ref1
 import Data.SortedMap
 import FS.Posix.Internal
-import IO.Async.Loop.Posix
 import System
 import System.Posix.Dir
 import Text.ILex.FS
@@ -53,54 +55,80 @@ interface Interpolation x => Interpolation v => Language x d t v | d where
   parser  : Parser1 (BBErr x) (List d)
 
   eval    : Env t -> d -> Either (BBErr x) (Maybe v, Env t)
+
+export %inline
+evalRes :
+     {auto lang : Language x d t v}
+  -> {auto has  : Has (ByteErr x) es}
+  -> Origin
+  -> Env t
+  -> d
+  -> Result es (Maybe v, Env t)
+evalRes o env = mapFst (inject . byteError o) . eval env
 ```
 
+We can use interface `Language` to stream declarations from a source
+file or other stream of byte strings.
+
 ```idris
+writeResults : Interpolation t => ConsoleOut e => List t -> Async e es ()
+writeResults [] = pure ()
+writeResults vs = (cputStr . unlines . map interpolate) vs
+
+parameters (0 d : Type)
+           {0 f : List Type -> Type -> Type}
+           {auto elin : ELift1 q f}
+           {auto lang : Language x d t v}
+           {auto hasb : Has (ByteErr x) es}
+
+  export
+  streamDecls : Origin -> Stream f es ByteString -> Pull f (List v) es (Env t)
+  streamDecls o bs =
+    streamParseFrom o (parser @{lang}) bs
+      |> C.escanReturn (builtin @{lang}) (evalRes o)
+      |> P.mapOutput catMaybes
+
 parameters (0 d : Type)
            {auto lang : Language x d t v}
            {auto hasn : Has Errno es}
            {auto hasb : Has (ByteErr x) es}
            {auto hasf : Has (ParseError x) es}
            {auto polh : PollH e}
+           {auto cnsl : ConsoleOut e}
 
   export
-  streamDecls : File Abs -> AsyncPull e (List v) es (Env t)
-  streamDecls f =
+  streamSrcFile : File Abs -> AsyncPull e (List v) es (Env t)
+  streamSrcFile f =
    let pth := interpolate f
-       o   := FileSrc pth
-    in locError (InnerError x) $ Prelude.do
-         readBytes pth
-           |> streamParseFrom o (parser @{lang})
-           |> C.escanReturn (builtin @{lang})
-                (\e => mapFst (inject . byteError o) . eval e)
-           |> P.mapOutput catMaybes
+    in locError (InnerError x) $ streamDecls d (FileSrc pth) (readBytes pth)
 
   export
   processSrcFile : File Abs -> AsyncStream e es Void
-  processSrcFile f =
-    streamDecls f
-      |> C.mapOutput interpolate
-      |> foreach (writeLines Stdout)
-      |> ignore
+  processSrcFile f = streamSrcFile f |> foreach writeResults |> ignore
+```
+
+For running our streaming programs, we provide some additional utilities:
+
+```idris
+parameters {auto log : Logger Poll}
+  export %inline
+  Interpolation t => Loggable Poll t where
+    logLoggable = ierror
 
 public export
 0 Errs : Type -> List Type
 Errs e = [Errno, ByteErr e,ParseError e,String]
 
-handlers : (0 e : _) -> Interpolation e => All (\e => e -> Async Poll [] ()) (Errs e)
-handlers _ = mapProperty (stderrLn .) [interpolate, interpolate, interpolate, interpolate]
-
 public export
 0 Prog : Type -> Type -> Type
-Prog e a = Async Poll (Errs e) a
-
-public export
-0 Strm : Type -> Type -> Type
-Strm e o = AsyncStream Poll (Errs e) o
+Prog e a = ConsoleOut Poll => Async Poll (Errs e) a
 
 export covering
 runProg : Interpolation e => Prog e () -> IO ()
-runProg prog = simpleApp $ handle (handlers e) prog
+runProg prog =
+  simpleApp $ use1 Console.stdOut $ \c =>
+   let logger := filter Info $ colorConsoleLogger c
+    in logErrs prog
 
 parameters (0 d : Type)
            {auto lang : Language x d t v}

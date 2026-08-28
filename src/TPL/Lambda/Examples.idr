@@ -17,18 +17,18 @@ Language TpeErr Declaration ClosedTerm Term where
       ]
   parser = decls
 
-  eval env (Include x)      = Right (env, Nothing)
+  eval env (Include x)      = Right (Nothing, env)
   eval env (Defn bb nm trm) =
     case lookup nm env of
       Just _   => defined bb nm
       Nothing  => Prelude.do
         ct <- closed env trm
-        pure (insert nm ct env, Nothing)
+        pure (Nothing, insert nm ct env)
   eval env (Eval x)         = Prelude.do
     ct <- closed env x
     case eval [<] ct of
       Left t  => stuck t
-      Right t => Right (env, Just $ cast t)
+      Right t => Right (Just $ cast t, env)
 
 covering
 main : IO ()
