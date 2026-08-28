@@ -34,8 +34,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build tpl
-        run: pack install tpl
+        run: pack --no-prompt install tpl
       - name: Test tpl
-        run: pack test tpl -n 1000
+        run: pack --no-prompt test tpl -n 1000
       - name: Make docs
         run: ./makedocs.sh
