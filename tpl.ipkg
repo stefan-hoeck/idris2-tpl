@@ -3,10 +3,11 @@ version    = 0.0.1
 authors    = "Stefan Höck"
 depends    = base    >= 0.6.0
            , filepath
-           , ilex
+           , ilex-streams
            , ilex-debug
            , linear
            , ref1
+           , streams-posix
 
 brief      = "Working through Types and Programming Languages"
 
@@ -21,6 +22,8 @@ modules    = TPL.BoolExp.Parser
            , TPL.Env
            , TPL.Error
            , TPL.Match
+           , TPL.Process
+
            , TPL.Name
            , TPL.Name.LSizeOf
            , TPL.Name.Scope

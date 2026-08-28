@@ -12,7 +12,9 @@ ipkg   = "katla-typst.ipkg"
 
 [custom.all]
 array.commit        = "latest:main"
+elin.commit         = "latest:main"
 ilex-debug.commit   = "latest:main"
 ilex-core.commit    = "latest:main"
 ilex.commit         = "latest:main"
 ilex-streams.commit = "latest:main"
+streams.commit      = "latest:main"

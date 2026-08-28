@@ -4,6 +4,7 @@
 #include("title.typ")
 #include("intro.typ")
 #include("parser.typ")
+#include("process.typ")
 
 #include("bool_term.typ")
 #include("bool_parser.typ")
@@ -18,5 +19,6 @@
 #include("lambda_var.typ")
 #include("lambda_env.typ")
 #include("lambda_term.typ")
+#include("lambda_parser.typ")
 
 #bibliography("bib.yaml")
