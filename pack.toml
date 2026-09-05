@@ -4,12 +4,6 @@ path   = "."
 ipkg   = "tpl.ipkg"
 test   = "test/test.ipkg"
 
-[custom.all.katla-typst]
-type   = "git"
-url    = "https://github.com/idris-community/katla.git"
-commit = "latest:typst"
-ipkg   = "katla-typst.ipkg"
-
 [custom.all]
 array.commit        = "latest:main"
 elin.commit         = "latest:main"
