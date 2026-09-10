@@ -75,8 +75,8 @@ data STACK : Type where
   Else  : STACK -> BytePos -> Term -> Term -> STACK
   Done  : Term -> STACK
 
-0 SK : Type -> Type
-SK = TPLState (TplErr Tpe) STACK Unit Lexers
+0 ST : Type -> Type
+ST = State (TplErr Tpe) STACK Unit Lexers
 ```
 
 === State Transitions
@@ -88,7 +88,7 @@ introducing a primitive function call. Note how we request
 an `ATOM` lexer after encountering a primitive function.
 
 ```idris
-parameters {auto sk : SK q}
+parameters {auto sk : ST q}
 
   onTerm : Term -> STACK -> F1 q Lexer
   onTerm x (If p s)       = putStackAs (Then p s x) THEN
@@ -105,7 +105,7 @@ parameters {auto sk : SK q}
       _         => pure ERR -- not possible
 
   onFun : (ByteBounds -> Term -> Term) -> F1 q Lexer
-  onFun f = posModStack SK (\p,s => Fun p s f) ATOM
+  onFun f = posModStack ST (\p,s => Fun p s f) ATOM
 ```
 
 === Lexers
@@ -118,18 +118,18 @@ above. The book might be more strict here, but I just couldn't
 care.
 
 ```idris
-atomSteps : Steps q Lexers SK
+atomSteps : Steps q Lexers ST
 atomSteps =
-     opn '(' (modStackAs SK Open TERM)
+     opn '(' (modStackAs ST Open TERM)
   :: bools (boundedWithStack $ onTerm . bool)
   ++ nats  (boundedWithStack $ onTerm . int)
 
 
-ptrans : Lex1 q Lexers SK
+ptrans : Lex1 q Lexers ST
 ptrans =
   lex1
     [ spaced TERM $
-        [ step (like "if")     (posModStack SK If TERM)
+        [ step (like "if")     (posModStack ST If TERM)
         , step (like "succ")   (onFun TSucc)
         , step (like "pred")   (onFun TPred)
         , step (like "iszero") (onFun TIsZ)
@@ -158,7 +158,7 @@ atms = ["true", "false", "0", "("]
 values : List String
 values = ["if", "succ", "pred", "iszero"] ++ atms
 
-perr : Arr32 Lexers (SK q -> F1 q ArErr)
+perr : Arr32 Lexers (ST q -> F1 q ArErr)
 perr =
   errs
     [ E TERM  $ unexpected values
@@ -168,9 +168,9 @@ perr =
     , E CLOSE $ unclosedIfEOI ")" [")"]
     ]
 
-peoi : Lexer -> SK q -> F1 q (Either ArErr Term)
+peoi : Lexer -> ST q -> F1 q (Either ArErr Term)
 peoi st sk t =
- let Done x # t := getStack t | _ # t => arrFail SK perr st sk t
+ let Done x # t := getStack t | _ # t => arrFail ST perr st sk t
   in Right x # t
 
 public export

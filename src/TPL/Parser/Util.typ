@@ -71,7 +71,8 @@ module TPL.Parser.Util
 import public Data.DPair
 import public TPL.Name
 import public Text.ILex
-import Text.ILex.Derive
+import public Text.ILex.State.Streaming
+import Text.ILex.State.Derive
 import Syntax.T1
 
 %default total
@@ -169,7 +170,7 @@ lambda : RExp True
 lambda = '\\' <|> 'λ'
 ```
 
-=== Parser State
+=== State Transitions
 
 An #ilex parser consists of a non-empty array of lexers, where
 each lexer is defined as a list of regular expressions paired
@@ -181,126 +182,8 @@ recognized and processed.
 
 The parser state typically is a record consisting of mutable
 and immutable fields, some of which are mandatory while others
-can be used for custom usage. Here is the definition of the
-parser state we are going to use in this project:
-
-```idris
-public export
-record TPLState (e,s,a : Type) (r : Bits32) (q : Type) where
-  [search q]
-  constructor TS
-  -- Position and token bounds
-  bufSize_    : Nat
-  prev_       : ByteString
-  cur_        : IBuffer bufSize_
-  prevOffset_ : Nat
-  curOffset_  : Nat
-  from_       : Ref q (LTENat bufSize_)
-  till_       : Ref q (LTENat bufSize_)
-  positions_  : Ref q (SnocList BytePos)
-
-  -- Current state
-  stack_     : Ref q s
-  state_     : Ref q (Index r)
-  decls      : Ref q (SnocList a)
-
-  -- Working with string literals
-  strings_   : Ref q (SnocList String)
-
-  -- Error handling
-  error_     : Ref q (Maybe $ BBErr e)
-
-  -- Block comments
-  comment    : Index r
-  depth      : Ref q Nat
-
-%runElab derive "TPLState" [FullStack]
-```
-
-Let's digest this a bit. The first couple of fields are mandatory, as they
-allow the #ilex run loop to update the byte position of the start and
-end byte of the current token (`from_` and `till_`) and to keep track
-of the opening positions of things like nested parentheses (`positions_`).
-The immutable fields represent the buffer currently being processed
-(`cur_`) plus its size (`bufSize_`). Stuff prefixed with `prev` is used
-for streaming: It is used to keep track of the running total position of
-the tokens as well as the byte prefix of the current token (if any).
-All this is handled by the #ilex run loop. Client code should access
-the relevant information via high-level functions provided through
-the `HasBytes` interface.
-
-Fields `stack_`, `state_`, and `decls` represent the accumulated
-parser state: `stack_` holds the parser stack of partially processed
-syntax trees, `state_` can be used to store the current lexer
-(in general, we only use this when processing block comments),
-and `decl` allows us to store and extract
-the top level declarations processed so far.
-
-For convenient parsing and un-escaping of string literals,
-#ilex offers the `HasStringLits` interface, which requires the
-parser state to have a field called `strings_` of the given type.
-Likewise, interface `HasBBErr` is used for error handling and
-requires a field called `error_` of the given type.
-
-In addition to these, we provide two custom fields for working
-with block comments: `comment` is the index of the block comment
-lexer, and `depth` is used to keep track of nested block comments.
-
-Implementations of the interfaces mentioned above
-(`HasBytes`, `HasStringLits`, `HasStack`, and `HasBBErr`) can
-be derived automatically using elaborator reflection. All that's
-required is that the state fields have the correct names and types.
-
-Before we can look at state transition functions, we need to
-provide an initialization function for the parser state:
-
-```idris
-export
-init :
-     (comment : Index r)
-  -> (stack   : s)
-  -> (n : Nat)
-  -> IBuffer n
-  -> F1 q (TPLState e s a r q)
-init c v n buf = T1.do
-  rf <- ref1 (first n)
-  rt <- ref1 (first n)
-  ps <- ref1 [<]
-  sk <- ref1 v
-  st <- ref1 c
-  ds <- ref1 [<]
-  ss <- ref1 [<]
-  er <- ref1 Nothing
-  dp <- ref1 Z
-  pure (TS n empty buf 0 0 rf rt ps sk st ds ss er c dp)
-```
-
-We also want to push parsed declarations onto the corresponding
-`SnocList`, extract the declarations parsed so far when streaming a
-large source file, as well as when reaching the end of input.
-Here are some utilities to do just that:
-
-```idris
-export %inline
-pushDecl : TPLState e s a r q => a -> s -> Index r -> F1 q (Index r)
-pushDecl @{st} d sk x t =
- let _ # t := push1 st.decls d t
-  in writeAs st.stack_ sk x t
-
-export
-decls : TPLState e s a r q -> F1 q (Either x $ List a)
-decls st t =
- let sd # t := replace1 st.decls [<] t
-  in Right (sd <>> []) # t
-
-export
-declChunk : TPLState e s a r q -> F1 q (Maybe $ List a)
-declChunk st t =
- let sd # t := replace1 st.decls [<] t
-  in maybeList sd # t
-```
-
-=== State Transitions
+can be used for custom usage. We use the predefined parser
+state from `Text.ILex.State.Streaming`.
 
 In order to define proper lexers, we have to pair regular expressions
 with (linear) functions, which will update the mutable parser state
@@ -385,14 +268,14 @@ comments, we need to keep track of the level of nesting.
 
 ```idris
 %inline
-startCmt : TPLState e s a r q => Index r -> F1 q (Index r)
+startCmt : State e s a r q => Index r -> F1 q (Index r)
 startCmt @{st} x = writeAs st.state_ x st.comment
 
 export %inline
 spaced :
      Index r
-  -> Steps q r (TPLState e s a r)
-  -> Entry r (DFA q r $ TPLState e s a r)
+  -> Steps q r (State e s a r)
+  -> Entry r (DFA q r $ State e s a r)
 spaced x ss =
   E x $ dfa $ jsonSpaced $
     ignore linecomment :: step "/*" (startCmt x) :: ss
@@ -420,22 +303,22 @@ and closing tags.
 
 ```idris
 %inline
-cmt : TPLState e s a r q => F1 q (Index r)
+cmt : State e s a r q => F1 q (Index r)
 cmt @{st} t = st.comment # t
 
 %inline
-incDepth : TPLState e s a r q => F1 q (Index r)
+incDepth : State e s a r q => F1 q (Index r)
 incDepth @{st} = read1 st.depth >>= \x => writeAs st.depth (S x) st.comment
 
 %inline
-decDepth : TPLState e s a r q => F1 q (Index r)
+decDepth : State e s a r q => F1 q (Index r)
 decDepth @{st} =
   read1 st.depth >>= \case
     0   => read1 st.state_
     S k => writeAs st.depth k st.comment
 
 export
-block : DFA q r (TPLState e s a r)
+block : DFA q r (State e s a r)
 block =
   dfa
     [ step (plus blockChar <|> "/" <|> "*") cmt
