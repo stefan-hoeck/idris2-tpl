@@ -48,8 +48,8 @@ data STACK : Type where
   Err   : STACK
 
 public export
-0 SK : Type -> Type
-SK = TPLState TpeErr STACK Declaration Lexers
+0 ST : Type -> Type
+ST = State TpeErr STACK Declaration Lexers
 ```
 
 There are two constructors of special note: `App` describes
@@ -92,7 +92,7 @@ the stack. In either case, we expect additional atoms or a
 token that can end an application sequence.
 
 ```idris
-parameters {auto sk : SK q}
+parameters {auto sk : ST q}
 
   onAtom : Term -> STACK -> F1 q Lexer
   onAtom t (App p x sx) = putStackAs (App p x (sx:<t)) ATOM_OR_CLOSE
@@ -122,8 +122,8 @@ that the parent stack is of the correct shape to continue:
   semicolon : STACK -> F1 q Lexer
   semicolon s =
     case endApp s of
-      Term (Def n) t => pushDecl (Defn n.bounds n.val t) Top TOP
-      Term Eval    t => pushDecl (Eval t) Top TOP
+      Term (Def n) t => pushValue (Defn n.bounds n.val t) Top TOP
+      Term Eval    t => pushValue (Eval t) Top TOP
       _              => failUnexpected [] ERR
 
   then' : STACK -> F1 q Lexer
@@ -152,7 +152,7 @@ we have to make sure we did not encounter one of the reserved keywords,
 all of which will immediately raise an exception.
 
 ```idris
-vars : Steps q Lexers SK
+vars : Steps q Lexers ST
 vars =
      step "if" (failUnexpected [] ERR)
   :: step "then" (failUnexpected [] ERR)
@@ -163,9 +163,9 @@ vars =
 An atom is a literal or an expression in parentheses:
 
 ```idris
-atoms : Steps q Lexers SK
+atoms : Steps q Lexers ST
 atoms =
-     opn '(' (modStackAs SK Open TERM)
+     opn '(' (modStackAs ST Open TERM)
   :: bools (boundedWithStack $ onAtom . bool)
   ++ nats  (boundedWithStack $ onAtom . int)
   ++ vars
@@ -177,16 +177,16 @@ of raising an error in some of these lexers:
 
 ```idris
 %inline
-toks : Lexer -> Steps q Lexers SK -> Entry Lexers (DFA q Lexers SK)
+toks : Lexer -> Steps q Lexers ST -> Entry Lexers (DFA q Lexers ST)
 toks = spaced
 
-ptrans : Lex1 q Lexers SK
+ptrans : Lex1 q Lexers ST
 ptrans =
   lex1
     [ toks TOP $ step "#eval" (putStackAs Eval TERM) :: vars
     , toks TERM $
-           step lambda (posModStack SK Lam VAR)
-        :: step "if" (posModStack SK If TERM)
+           step lambda (posModStack ST Lam VAR)
+        :: step "if" (posModStack ST If TERM)
         :: atoms
     , toks ATOM atoms
     , toks ATOM_OR_CLOSE $
@@ -205,21 +205,21 @@ ptrans =
 === Lexers
 
 ```idris
-perr : Arr32 Lexers (SK q -> F1 q LamErr)
+perr : Arr32 Lexers (ST q -> F1 q LamErr)
 perr =
   arr32 Lexers (unexpected [])
     [ E DOT $ unexpected ["."]
     , E EQ $ unexpected ["="]
     ]
 
-peoi : Lexer -> SK q -> F1 q (Either LamErr $ List Declaration)
+peoi : Lexer -> ST q -> F1 q (Either LamErr $ List Declaration)
 peoi st sk t =
- let Top # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
-  in decls sk t
+ let Top # t := read1 sk.stack_ t | _ # t => arrFail ST perr st sk t
+  in values sk t
 
 export
 decls : P1 q LamErr (List Declaration)
-decls = P TERM (init COMMENT Top) ptrans declChunk perr peoi
+decls = P TERM (init COMMENT Top) ptrans valuesChunk perr peoi
 ```
 
 // vi: filetype=idris2:syntax=typst

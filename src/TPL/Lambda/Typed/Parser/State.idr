@@ -99,8 +99,8 @@ pat : STACK -> BytePos -> STACK
 pat s p = Pat s p [<]
 
 public export
-0 SK : Type -> Type
-SK = TPLState TpeErr STACK Declaration Lexers
+0 ST : Type -> Type
+ST = State TpeErr STACK Declaration Lexers
 
 endTerm : PTerm -> STACK -> STACK
 endTerm t (LamTpe s b p tp)      = endTerm (PLam (fromPos b t) p tp t) s
@@ -132,7 +132,7 @@ endAs s =
 -- State Transitions
 --------------------------------------------------------------------------------
 
-parameters {auto sk : SK q}
+parameters {auto sk : ST q}
   export %inline
   die : F1 q Lexer
   die = failUnexpected [] ERR

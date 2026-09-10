@@ -96,11 +96,11 @@ data STACK : Type where
 
 %runElab derive "STACK" [Show,Eq]
 
-0 SK : Type -> Type
-SK = TPLState Void STACK Unit Lexers
+0 ST : Type -> Type
+ST = State Void STACK Unit Lexers
 ```
 
-Alias `SK q` is used for the _mutable parser state_ running in state thread
+Alias `ST q` is used for the _mutable parser state_ running in state thread
 `q` (see the #ref1 library) that keeps track of the internal state of
 the parser (current byte vector, start and end position of the current
 token, a mutable reference holding the parser stack, and other utilities).
@@ -122,7 +122,7 @@ defined by the parser stack plus the lexer we are currently using.
 
 
 ```idris
-parameters {auto sk : SK q}
+parameters {auto sk : ST q}
 
   onTerm : Term -> STACK -> F1 q Lexer
   onTerm t (If p)       = putStackAs (Then p t) THEN
@@ -153,14 +153,14 @@ These lexers are grouped in an array with the numeric constants serving
 as safe indices into this array:
 
 ```idris
-ptrans : Lex1 q Lexers SK
+ptrans : Lex1 q Lexers ST
 ptrans =
   lex1
     [ spaced TERM
         [ step "true"  $ withStack $ onTerm (bool True)
         , step "false" $ withStack $ onTerm (bool False)
-        , step "if"    $ modStackAs SK If TERM
-        , opn '('      $ modStackAs SK Open TERM
+        , step "if"    $ modStackAs ST If TERM
+        , opn '('      $ modStackAs ST Open TERM
         ]
     , spaced THEN  [step' "then" TERM]
     , spaced ELSE  [step' "else" TERM]
@@ -180,7 +180,7 @@ In case of an unclosed parenthesis, we opt to highlight it if we reached the
 end of input.
 
 ```idris
-perr : Arr32 Lexers (SK q -> F1 q (BBErr Void))
+perr : Arr32 Lexers (ST q -> F1 q (BBErr Void))
 perr =
   errs
     [ E TERM  $ unexpected ["if", "true", "false", "("]
@@ -197,9 +197,9 @@ everything into a `P1` record:
 
 
 ```idris
-peoi : Lexer -> SK q -> F1 q (Either (BBErr Void) Term)
+peoi : Lexer -> ST q -> F1 q (Either (BBErr Void) Term)
 peoi st sk t =
- let Done x # t := read1 sk.stack_ t | _ # t => arrFail SK perr st sk t
+ let Done x # t := read1 sk.stack_ t | _ # t => arrFail ST perr st sk t
   in Right x # t
 
 public export
