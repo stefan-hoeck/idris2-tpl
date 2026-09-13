@@ -17,7 +17,7 @@ module TPL.Lambda.Parser
 
 import Derive.Prelude
 import Syntax.T1
-import Text.ILex.Derive
+import Text.ILex.State.Derive
 import TPL.Parser.Util
 import public TPL.Lambda.Term
 

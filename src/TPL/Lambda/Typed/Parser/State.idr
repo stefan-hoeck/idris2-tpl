@@ -1,7 +1,7 @@
 module TPL.Lambda.Typed.Parser.State
 
 import Derive.Prelude
-import Text.ILex.Derive
+import Text.ILex.State.Derive
 import TPL.Parser.Util
 import public TPL.Lambda.Typed.Declaration
 

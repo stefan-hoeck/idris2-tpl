@@ -45,7 +45,7 @@ and it comes with its own restricted lexer.
 module TPL.ArExp.Parser
 
 import Derive.Prelude
-import Text.ILex.Derive
+import Text.ILex.State.Derive
 import Syntax.T1
 import public TPL.ArExp.TT
 import public TPL.ArExp.Term

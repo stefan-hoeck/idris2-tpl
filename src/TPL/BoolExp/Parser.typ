@@ -37,7 +37,7 @@ The different sets of tokens give rise to six lexers:
 module TPL.BoolExp.Parser
 
 import Derive.Prelude
-import Text.ILex.Derive
+import Text.ILex.State.Derive
 import TPL.Parser.Util
 import Syntax.T1
 import public TPL.BoolExp.Term
